@@ -15,6 +15,15 @@ install -d -m 700 /opt/evoque/releases
 install -m 600 /dev/null /opt/evoque/production.env
 ```
 
+Como alternativa, use o script idempotente incluído no repositório:
+
+```bash
+sh infra/scripts/bootstrap-kvm2.sh '<chave-publica-ssh-do-github-actions>'
+```
+
+Ele não sobrescreve `production.env` e só adiciona a chave pública caso ela
+ainda não esteja em `/root/.ssh/authorized_keys`.
+
 Preencha `/opt/evoque/production.env` a partir de
 `infra/env/production.env.example`. Durante o MVP, mantenha obrigatoriamente:
 
@@ -54,4 +63,3 @@ executar `docker pull`.
    sobe os três containers: API, web e Nginx.
 
 Nos deploys posteriores, cada repositório atualiza somente sua própria imagem.
-

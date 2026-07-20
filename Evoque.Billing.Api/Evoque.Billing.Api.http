@@ -1,0 +1,101 @@
+@EvoqueBillingApiHostAddress = http://localhost:5207
+@billingDraftId = replace-with-an-approved-draft-id
+@chargeBatchId = replace-with-a-batch-with-failed-items
+@externalCompanyId = replace-with-the-evo-company-id
+
+### Verificação segura: não chama serviços externos nem altera dados.
+GET {{EvoqueBillingApiHostAddress}}/health
+Accept: application/json
+
+### Verificação segura no Asaas configurado: apenas lista clientes.
+GET {{EvoqueBillingApiHostAddress}}/api/asaas/customers?limit=10
+Accept: application/json
+
+### Histórico de lotes de uma competência: apenas leitura.
+GET {{EvoqueBillingApiHostAddress}}/api/billing-periods/2026/8/charge-batches
+Accept: application/json
+
+### Consultas ao Evo — somente leitura.
+GET {{EvoqueBillingApiHostAddress}}/api/evo/employees?limit=25
+Accept: application/json
+
+### Membros e matrículas do Evo — somente leitura.
+GET {{EvoqueBillingApiHostAddress}}/api/evo/members?status=1&limit=25
+Accept: application/json
+
+### Empresas e convênios retornados pelo Evo — somente leitura.
+GET {{EvoqueBillingApiHostAddress}}/api/evo/companies
+Accept: application/json
+
+### Grupos e filiais do Evo — somente leitura.
+GET {{EvoqueBillingApiHostAddress}}/api/evo/branch-groups
+Accept: application/json
+
+### Ação mutável — execute somente em Sandbox após criar e aprovar uma prévia de teste.
+### A confirmação textual é proposital e o ambiente configurado continua sendo validado pela API.
+POST {{EvoqueBillingApiHostAddress}}/api/charge-batches
+Content-Type: application/json
+
+{
+  "operatorId": "operador-de-homologacao",
+  "dueDate": "2026-08-10",
+  "confirmationPhrase": "CONFIRMAR",
+  "billingDraftIds": ["{{billingDraftId}}"]
+}
+
+### Agenda recorrente da empresa. Dias aceitos: 02, 18, 20 e 25.
+PUT {{EvoqueBillingApiHostAddress}}/api/company-billing-schedules/{{externalCompanyId}}
+Content-Type: application/json
+
+{
+  "billingDay": 20,
+  "isActive": true,
+  "operatorId": "operador-de-homologacao"
+}
+
+### Prévia segura: não chama o Asaas.
+POST {{EvoqueBillingApiHostAddress}}/api/charge-batches/previews
+Content-Type: application/json
+
+{
+  "operatorId": "operador-de-homologacao",
+  "dueDate": "2026-08-20",
+  "asaasEnvironment": "Sandbox",
+  "billingDraftIds": ["{{billingDraftId}}"]
+}
+
+### Prévia segura de todas as empresas agendadas para o dia.
+POST {{EvoqueBillingApiHostAddress}}/api/billing-periods/2026/8/scheduled-charge-batches/previews
+Content-Type: application/json
+
+{
+  "operatorId": "operador-de-homologacao",
+  "dueDate": "2026-08-20",
+  "asaasEnvironment": "Sandbox"
+}
+
+### Aprova a prévia. Ainda não chama o Asaas.
+POST {{EvoqueBillingApiHostAddress}}/api/charge-batches/{{chargeBatchId}}/approve
+Content-Type: application/json
+
+{
+  "operatorId": "operador-de-homologacao"
+}
+
+### Execução mutável. Durante a homologação, use somente Sandbox.
+POST {{EvoqueBillingApiHostAddress}}/api/charge-batches/{{chargeBatchId}}/execute
+Content-Type: application/json
+
+{
+  "operatorId": "operador-de-homologacao",
+  "confirmationPhrase": "CONFIRMAR"
+}
+
+### Ação mutável — repete exclusivamente os itens que falharam no lote informado.
+POST {{EvoqueBillingApiHostAddress}}/api/charge-batches/{{chargeBatchId}}/retry-failed
+Content-Type: application/json
+
+{
+  "operatorId": "operador-de-homologacao",
+  "confirmationPhrase": "CONFIRMAR"
+}

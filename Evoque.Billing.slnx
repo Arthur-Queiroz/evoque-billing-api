@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Evoque.Billing.Api.Tests/Evoque.Billing.Api.Tests.csproj" />
+  <Project Path="Evoque.Billing.Api/Evoque.Billing.Api.csproj" />
+</Solution>

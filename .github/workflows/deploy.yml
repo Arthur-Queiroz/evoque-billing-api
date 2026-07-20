@@ -1,0 +1,83 @@
+name: Publish API and deploy KVM2
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: evoque-api-production
+  cancel-in-progress: false
+
+jobs:
+  publish-and-deploy:
+    if: vars.DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Autenticar no GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publicar imagem da API
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/arthur-queiroz/evoque-billing-api:main
+            ghcr.io/arthur-queiroz/evoque-billing-api:${{ github.sha }}
+
+      - name: Carregar chave de deploy
+        uses: webfactory/ssh-agent@v0.9.1
+        with:
+          ssh-private-key: ${{ secrets.KVM2_DEPLOY_SSH_PRIVATE_KEY }}
+
+      - name: Instalar Cloudflare Access CLI
+        run: |
+          set -eu
+          curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o "$RUNNER_TEMP/cloudflared"
+          sudo install -m 0755 "$RUNNER_TEMP/cloudflared" /usr/local/bin/cloudflared
+
+      - name: Configurar SSH para KVM2
+        env:
+          DEPLOY_HOST: ${{ vars.KVM2_DEPLOY_HOST }}
+          ACCESS_HOST: ${{ vars.KVM2_CLOUDFLARE_SSH_HOST }}
+        run: |
+          set -eu
+          test -n "$DEPLOY_HOST"
+          test -n "$ACCESS_HOST"
+          mkdir -p ~/.ssh
+          cat >> ~/.ssh/config <<EOF
+          Host kvm2-evoque
+            HostName $DEPLOY_HOST
+            User root
+            ProxyCommand cloudflared access ssh --hostname $ACCESS_HOST
+            StrictHostKeyChecking accept-new
+          EOF
+
+      - name: Atualizar runtime da VPS
+        env:
+          RELEASE_NAME: ${{ github.sha }}
+        run: |
+          set -eu
+          release_directory="/opt/evoque/releases/api-$RELEASE_NAME"
+          ssh kvm2-evoque "install -d -m 700 '$release_directory'"
+          tar --exclude-vcs -czf - . | ssh kvm2-evoque "tar -xzf - -C '$release_directory'"
+          ssh kvm2-evoque "
+            set -eu
+            test -f /opt/evoque/production.env
+            sh '$release_directory/infra/scripts/deploy.sh' '$release_directory'
+            ln -sfn '$release_directory' /opt/evoque/current
+          "
+

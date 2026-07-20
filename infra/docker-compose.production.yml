@@ -1,0 +1,48 @@
+name: evoque
+
+services:
+  api:
+    image: ghcr.io/arthur-queiroz/evoque-billing-api:${EVOQUE_API_IMAGE_TAG:-main}
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__BillingDatabase: ${CONNECTIONSTRINGS__BILLINGDATABASE}
+      Cors__AllowedOrigins__0: ${PUBLIC_APPLICATION_URL}
+      Asaas__IntegrationEnvironment: ${ASAAS__INTEGRATIONENVIRONMENT}
+      Asaas__BaseUrl: ${ASAAS__BASEURL}
+      Asaas__ApiKey: ${ASAAS__APIKEY}
+      Asaas__AllowChargeCreation: ${ASAAS__ALLOWCHARGECREATION}
+      Evo__BaseUrl: ${EVO__BASEURL:-}
+      Evo__Username: ${EVO__USERNAME:-}
+      Evo__ApiKey: ${EVO__APIKEY:-}
+    restart: unless-stopped
+    networks:
+      - internal
+
+  web:
+    image: ghcr.io/arthur-queiroz/evoque-billing-web:${EVOQUE_WEB_IMAGE_TAG:-main}
+    restart: unless-stopped
+    networks:
+      - internal
+
+  nginx:
+    image: nginx:1.27-alpine
+    depends_on:
+      - api
+      - web
+    ports:
+      - "127.0.0.1:${EVOQUE_HTTP_PORT:-8085}:80"
+    volumes:
+      - ./nginx/evoque.conf:/etc/nginx/conf.d/default.conf:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks:
+      - internal
+
+networks:
+  internal:
+    driver: bridge

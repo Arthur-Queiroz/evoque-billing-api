@@ -38,6 +38,11 @@ jobs:
             ghcr.io/arthur-queiroz/evoque-billing-api:main
             ghcr.io/arthur-queiroz/evoque-billing-api:${{ github.sha }}
 
+      - name: Permitir pull público da imagem
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method PATCH /user/packages/container/evoque-billing-api -f visibility=public
+
       - name: Carregar chave de deploy
         uses: webfactory/ssh-agent@v0.9.1
         with:
@@ -80,4 +85,3 @@ jobs:
             sh '$release_directory/infra/scripts/deploy.sh' '$release_directory'
             ln -sfn '$release_directory' /opt/evoque/current
           "
-

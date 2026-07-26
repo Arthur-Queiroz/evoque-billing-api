@@ -1,0 +1,4 @@
+interface:
+  display_name: "Deploy CI/CD Evoque"
+  short_description: "Publicar e diagnosticar a stack na KVM2"
+  default_prompt: "Use $deploy-cicd para preparar ou diagnosticar o deploy da API Evoque na KVM2."

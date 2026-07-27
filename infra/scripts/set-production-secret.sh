@@ -9,6 +9,8 @@ case "$environment_key" in
     ;;
   ASAAS__APIKEY | ASAAS__PRODUCTION__APIKEY | EVO__USERNAME | EVO__APIKEY)
     ;;
+  ASAAS__PRODUCTION__ALLOWCHARGECREATION)
+    ;;
   *)
     echo "Chave de ambiente não permitida: $environment_key" >&2
     exit 1
@@ -23,6 +25,13 @@ fi
 secret_value="$(cat)"
 if [ -z "$secret_value" ]; then
   echo "O valor secreto não pode ser vazio." >&2
+  exit 1
+fi
+
+if [ "$environment_key" = "ASAAS__PRODUCTION__ALLOWCHARGECREATION" ] \
+  && [ "$secret_value" != "true" ] \
+  && [ "$secret_value" != "false" ]; then
+  echo "A criação de cobranças em produção deve ser true ou false." >&2
   exit 1
 fi
 

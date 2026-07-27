@@ -72,6 +72,7 @@ jobs:
           MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
           ASAAS_API_KEY: ${{ secrets.ASAAS_API_KEY }}
           ASAAS_PRODUCTION_API_KEY: ${{ secrets.ASAAS_PRODUCTION_API_KEY }}
+          ASAAS_PRODUCTION_CHARGE_CREATION_ENABLED: ${{ vars.ASAAS_PRODUCTION_CHARGE_CREATION_ENABLED || 'false' }}
           EVO_USERNAME: ${{ secrets.EVO_USERNAME }}
           EVO_API_KEY: ${{ secrets.EVO_API_KEY }}
           GHCR_USERNAME: ${{ github.actor }}
@@ -81,6 +82,7 @@ jobs:
           test -n "$MYSQL_PASSWORD"
           test -n "$ASAAS_API_KEY"
           test -n "$ASAAS_PRODUCTION_API_KEY"
+          test "$ASAAS_PRODUCTION_CHARGE_CREATION_ENABLED" = "true" || test "$ASAAS_PRODUCTION_CHARGE_CREATION_ENABLED" = "false"
           test -n "$EVO_USERNAME"
           test -n "$EVO_API_KEY"
           test -n "$GHCR_TOKEN"
@@ -99,6 +101,9 @@ jobs:
           printf '%s' "$ASAAS_PRODUCTION_API_KEY" |
             ssh kvm2-evoque \
               "sh '$release_directory/infra/scripts/set-production-secret.sh' ASAAS__PRODUCTION__APIKEY"
+          printf '%s' "$ASAAS_PRODUCTION_CHARGE_CREATION_ENABLED" |
+            ssh kvm2-evoque \
+              "sh '$release_directory/infra/scripts/set-production-secret.sh' ASAAS__PRODUCTION__ALLOWCHARGECREATION"
           printf '%s' "$EVO_USERNAME" |
             ssh kvm2-evoque \
               "sh '$release_directory/infra/scripts/set-production-secret.sh' EVO__USERNAME"

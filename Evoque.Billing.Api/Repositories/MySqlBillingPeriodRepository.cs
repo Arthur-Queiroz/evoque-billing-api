@@ -87,7 +87,7 @@ public sealed class MySqlBillingPeriodRepository(MySqlConnectionFactory connecti
     private static BillingPeriod ReadBillingPeriod(MySqlDataReader reader)
     {
         return BillingPeriod.Restore(
-            Guid.Parse(reader.GetString("id")),
+            reader.GetGuid("id"),
             new BillingPeriodReference(reader.GetInt32("reference_year"), reader.GetInt32("reference_month")),
             Enum.Parse<BillingPeriodStatus>(reader.GetString("status")),
             ReadUtcDateTime(reader, "created_at"),

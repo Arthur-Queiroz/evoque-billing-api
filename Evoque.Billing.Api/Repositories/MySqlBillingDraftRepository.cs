@@ -235,8 +235,8 @@ public sealed class MySqlBillingDraftRepository(MySqlConnectionFactory connectio
     private static BillingDraftData ReadBillingDraftData(MySqlDataReader reader)
     {
         return new BillingDraftData(
-            Guid.Parse(reader.GetString("id")),
-            Guid.Parse(reader.GetString("billing_period_id")),
+            reader.GetGuid("id"),
+            reader.GetGuid("billing_period_id"),
             reader.GetString("external_company_id"),
             reader.GetString("company_name"),
             reader.GetString("company_tax_id"),

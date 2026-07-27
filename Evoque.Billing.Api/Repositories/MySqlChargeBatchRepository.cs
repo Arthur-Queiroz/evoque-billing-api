@@ -192,7 +192,7 @@ public sealed class MySqlChargeBatchRepository(MySqlConnectionFactory connection
         while (await reader.ReadAsync(cancellationToken))
         {
             chargeBatchItems.Add(ChargeBatchItem.Restore(
-                Guid.Parse(reader.GetString("billing_draft_id")),
+                reader.GetGuid("billing_draft_id"),
                 Enum.Parse<ChargeBatchItemStatus>(reader.GetString("status")),
                 GetNullableString(reader, "asaas_payment_id"),
                 GetNullableString(reader, "bank_slip_url"),
@@ -206,8 +206,8 @@ public sealed class MySqlChargeBatchRepository(MySqlConnectionFactory connection
     private static ChargeBatchData ReadChargeBatchData(MySqlDataReader reader)
     {
         return new ChargeBatchData(
-            Guid.Parse(reader.GetString("id")),
-            Guid.Parse(reader.GetString("billing_period_id")),
+            reader.GetGuid("id"),
+            reader.GetGuid("billing_period_id"),
             DateOnly.FromDateTime(reader.GetDateTime("due_date")),
             reader.GetString("operator_id"),
             GetNullableGuid(reader, "retry_of_charge_batch_id"),
@@ -245,8 +245,7 @@ public sealed class MySqlChargeBatchRepository(MySqlConnectionFactory connection
 
     private static Guid? GetNullableGuid(MySqlDataReader reader, string columnName)
     {
-        var value = GetNullableString(reader, columnName);
-        return value is null ? null : Guid.Parse(value);
+        return reader.IsDBNull(reader.GetOrdinal(columnName)) ? null : reader.GetGuid(columnName);
     }
 
     private static DateTimeOffset GetUtcDateTime(MySqlDataReader reader, string columnName)

@@ -52,7 +52,7 @@ public sealed class MySqlAuditLogRepository(MySqlConnectionFactory connectionFac
         while (await reader.ReadAsync(cancellationToken))
         {
             auditLogs.Add(new AuditLog(
-                Guid.Parse(reader.GetString("id")),
+                reader.GetGuid("id"),
                 reader.GetString("action"),
                 reader.GetString("operator_id"),
                 new DateTimeOffset(DateTime.SpecifyKind(reader.GetDateTime("occurred_at"), DateTimeKind.Utc)),
@@ -66,6 +66,6 @@ public sealed class MySqlAuditLogRepository(MySqlConnectionFactory connectionFac
 
     private static Guid? GetNullableGuid(MySqlDataReader reader, string columnName)
     {
-        return reader.IsDBNull(reader.GetOrdinal(columnName)) ? null : Guid.Parse(reader.GetString(columnName));
+        return reader.IsDBNull(reader.GetOrdinal(columnName)) ? null : reader.GetGuid(columnName);
     }
 }

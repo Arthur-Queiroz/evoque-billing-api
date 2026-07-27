@@ -16,6 +16,11 @@ e nenhum operador executa `docker compose up` manualmente para publicar código.
 7. executa o script versionado de deploy, aguarda `/health` e atualiza o link
    `/opt/evoque/current` somente após sucesso.
 
+Se o healthcheck falhar, o script inclui no log do Actions o estado dos
+containers e as últimas linhas apenas da API e do proxy. Logs do MySQL não são
+impressos porque a imagem oficial informa uma senha root aleatória na primeira
+inicialização.
+
 ## Configuração externa obrigatória
 
 - GitHub Secret de repositório: `KVM2_DEPLOY_SSH_PRIVATE_KEY`;

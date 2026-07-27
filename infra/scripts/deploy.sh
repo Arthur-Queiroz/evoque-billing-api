@@ -32,4 +32,7 @@ while [ "$attempt" -le 12 ]; do
 done
 
 echo "A aplicação não respondeu ao health check: $health_url" >&2
+docker compose --env-file "$environment_file" -f "$compose_file" ps >&2
+docker compose --env-file "$environment_file" -f "$compose_file" logs \
+  --tail 200 api nginx >&2
 exit 1

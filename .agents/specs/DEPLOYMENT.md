@@ -29,7 +29,8 @@ inicialização.
 - GitHub Variables: `DEPLOY_ENABLED`, `KVM2_DEPLOY_HOST`,
   `KVM2_CLOUDFLARE_SSH_HOST`;
 - VPS: Docker, Docker Compose, Cloudflared e `/opt/evoque/production.env`;
-- Proxy HTTPS externo: encaminha o domínio para `127.0.0.1:8085`.
+- Cloudflare Tunnel: encaminha `evoque.devarthur.com.br` para
+  `127.0.0.1:8088`.
 
 O arquivo completo `production.env` nunca é enviado pelo workflow. A pipeline
 atualiza somente as quatro credenciais recebidas dos GitHub Environment

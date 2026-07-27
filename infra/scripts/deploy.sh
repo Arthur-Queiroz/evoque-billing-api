@@ -17,7 +17,7 @@ docker compose --env-file "$environment_file" -f "$compose_file" up -d --remove-
 docker compose --env-file "$environment_file" -f "$compose_file" ps
 
 health_port="$(sed -n 's/^EVOQUE_HTTP_PORT=//p' "$environment_file" | tail -n 1)"
-health_port="${health_port:-8085}"
+health_port="${health_port:-8088}"
 health_url="http://127.0.0.1:${health_port}/health"
 
 attempt=1

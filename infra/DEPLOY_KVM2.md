@@ -43,7 +43,8 @@ O Compose fixa o ambiente, a URL e a criação de cobranças no Asaas Sandbox.
 Para produção, a troca de ambiente e a autorização operacional devem ocorrer
 juntas, em alteração revisada de código.
 
-O proxy HTTPS da KVM2 deve encaminhar o domínio para `127.0.0.1:8085`.
+O Cloudflare Tunnel da KVM2 deve encaminhar `evoque.devarthur.com.br` para
+`127.0.0.1:8088`.
 
 ## GitHub Actions
 

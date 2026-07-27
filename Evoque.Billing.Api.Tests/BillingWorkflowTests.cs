@@ -300,6 +300,34 @@ public sealed class BillingWorkflowTests
     }
 
     [Fact]
+    public async Task CreatePreviewAsync_RejectsPastDueDateBeforeCallingAsaas()
+    {
+        var asaasChargeGateway = new RecordingAsaasChargeGateway();
+        var services = CreateServices(asaasChargeGateway);
+        var billingPeriodReference = new BillingPeriodReference(2026, 8);
+
+        await services.BillingPeriodService.CreateAsync(billingPeriodReference, "maria", CancellationToken.None);
+        var billingDraft = await services.BillingDraftService.CreateAsync(
+            billingPeriodReference,
+            CreateDraftCommand("empresa-1", "Empresa Um"),
+            "maria",
+            CancellationToken.None);
+        await services.BillingDraftService.ApproveAsync(billingDraft.Id, "maria", CancellationToken.None);
+
+        var exception = await Assert.ThrowsAsync<ValidationException>(() =>
+            services.ChargeBatchService.CreatePreviewAsync(
+                new CreateChargeBatchPreviewRequest(
+                    "maria",
+                    new DateOnly(2020, 1, 2),
+                    "Sandbox",
+                    [billingDraft.Id]),
+                CancellationToken.None));
+
+        Assert.Contains("já passou", exception.Message);
+        Assert.False(asaasChargeGateway.WasCalled);
+    }
+
+    [Fact]
     public async Task ScheduledPreviewAsync_UsesOnlyApprovedDraftsForCompaniesScheduledOnTheDueDay()
     {
         var asaasChargeGateway = new RecordingAsaasChargeGateway();
@@ -452,14 +480,16 @@ public sealed class BillingWorkflowTests
             auditLogRepository,
             notificationGateway ?? new RecordingAsaasCustomerNotificationGateway(
                 new AsaasCustomerEmailDeliveryReadiness(true, true)),
-            asaasChargeGateway ?? new RecordingAsaasChargeGateway());
+            asaasChargeGateway ?? new RecordingAsaasChargeGateway(),
+            TimeProvider.System);
 
         var chargeBatchService = new ChargeBatchService(
             billingPeriodRepository,
             billingDraftRepository,
             chargeBatchRepository,
             auditLogRepository,
-            chargeCreationService);
+            chargeCreationService,
+            TimeProvider.System);
         var companyBillingScheduleService = new CompanyBillingScheduleService(
             companyBillingScheduleRepository,
             auditLogRepository);

@@ -9,7 +9,8 @@ public sealed class ChargeCreationService(
     IBillingDraftRepository billingDraftRepository,
     IAuditLogRepository auditLogRepository,
     IAsaasCustomerNotificationGateway asaasCustomerNotificationGateway,
-    IAsaasChargeGateway asaasChargeGateway)
+    IAsaasChargeGateway asaasChargeGateway,
+    TimeProvider timeProvider)
 {
     public const string RequiredConfirmationPhrase = "CONFIRMAR";
 
@@ -24,6 +25,13 @@ public sealed class ChargeCreationService(
         if (!string.Equals(confirmationPhrase?.Trim(), RequiredConfirmationPhrase, StringComparison.Ordinal))
         {
             throw new ValidationException("Digite CONFIRMAR para autorizar a criação da cobrança.");
+        }
+
+        var currentDate = DateOnly.FromDateTime(timeProvider.GetLocalNow().DateTime);
+        if (dueDate < currentDate)
+        {
+            throw new ValidationException(
+                $"O vencimento {dueDate:dd/MM/yyyy} já passou. Selecione uma competência com vencimento a partir de {currentDate:dd/MM/yyyy}.");
         }
 
         var billingDraft = await billingDraftRepository.FindByIdAsync(billingDraftId, cancellationToken)

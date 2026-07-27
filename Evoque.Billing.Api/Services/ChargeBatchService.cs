@@ -9,7 +9,8 @@ public sealed class ChargeBatchService(
     IBillingDraftRepository billingDraftRepository,
     IChargeBatchRepository chargeBatchRepository,
     IAuditLogRepository auditLogRepository,
-    ChargeCreationService chargeCreationService)
+    ChargeCreationService chargeCreationService,
+    TimeProvider timeProvider)
 {
     public async Task<ChargeBatchResponse> CreatePreviewAsync(
         CreateChargeBatchPreviewRequest request,
@@ -170,6 +171,13 @@ public sealed class ChargeBatchService(
         if (string.IsNullOrWhiteSpace(operatorId))
         {
             throw new ValidationException("O responsável pela criação do lote é obrigatório.");
+        }
+
+        var currentDate = DateOnly.FromDateTime(timeProvider.GetLocalNow().DateTime);
+        if (dueDate < currentDate)
+        {
+            throw new ValidationException(
+                $"O vencimento {dueDate:dd/MM/yyyy} já passou. Selecione uma competência com vencimento a partir de {currentDate:dd/MM/yyyy}.");
         }
 
         var billingDrafts = new List<BillingDraft>();

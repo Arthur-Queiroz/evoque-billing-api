@@ -74,6 +74,7 @@ builder.Services.AddScoped<IAsaasChargeGateway, AsaasChargeGateway>();
 builder.Services.AddScoped<IAsaasCustomerNotificationGateway, AsaasCustomerNotificationGateway>();
 builder.Services.AddScoped<IAsaasCustomerGateway, AsaasCustomerGateway>();
 builder.Services.AddScoped<IEvoDirectoryGateway, EvoDirectoryGateway>();
+builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<BillingPeriodService>();
 builder.Services.AddScoped<BillingDraftService>();
 builder.Services.AddScoped<ChargeCreationService>();

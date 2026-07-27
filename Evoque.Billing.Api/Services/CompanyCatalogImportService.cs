@@ -17,8 +17,7 @@ public sealed class CompanyCatalogImportService(
     CompanyCatalogSpreadsheetReader companyCatalogSpreadsheetReader,
     ICompanyRepository companyRepository,
     ICompanyCatalogImportRepository companyCatalogImportRepository,
-    CompanyRegistryEnrichmentService companyRegistryEnrichmentService,
-    IAuditLogRepository auditLogRepository)
+    CompanyRegistryEnrichmentService companyRegistryEnrichmentService)
 {
     private const long MaximumSpreadsheetSize = 25 * 1024 * 1024;
 
@@ -52,6 +51,7 @@ public sealed class CompanyCatalogImportService(
             StringComparer.Ordinal);
 
         var createdCompanies = new List<Company>();
+        var synchronizedCompanies = new List<Company>();
         var updatedCompanyCount = 0;
         var preservedManualNameCount = 0;
         foreach (var discoveredCompany in importedCatalog.Companies)
@@ -77,7 +77,7 @@ public sealed class CompanyCatalogImportService(
                     importId,
                     operatorId,
                     synchronizedAt);
-                await companyRepository.UpsertAsync(existingCompany, cancellationToken);
+                synchronizedCompanies.Add(existingCompany);
                 updatedCompanyCount++;
                 continue;
             }
@@ -89,7 +89,7 @@ public sealed class CompanyCatalogImportService(
                 importId,
                 operatorId,
                 synchronizedAt);
-            await companyRepository.UpsertAsync(newCompany, cancellationToken);
+            synchronizedCompanies.Add(newCompany);
             createdCompanies.Add(newCompany);
         }
 
@@ -118,21 +118,20 @@ public sealed class CompanyCatalogImportService(
             updatedCompanyCount,
             unseenCompanyCount,
             importedCatalog.Warnings.Count);
+        var auditLog = AuditLog.Create(
+            "company-catalog.synchronized",
+            operatorId,
+            synchronizedAt,
+            null,
+            null,
+            $"Sincronização {importId} do catálogo: {importedCatalog.Companies.Count} empresas "
+            + $"encontradas, {createdCompanies.Count} criadas, {updatedCompanyCount} atualizadas, "
+            + $"{unseenCompanyCount} não vistas, {importedCatalog.Warnings.Count} avisos.");
         await companyCatalogImportRepository.AddAsync(
             companyCatalogImport,
             importedMembers,
-            cancellationToken);
-
-        await auditLogRepository.AddAsync(
-            AuditLog.Create(
-                "company-catalog.synchronized",
-                operatorId,
-                synchronizedAt,
-                null,
-                null,
-                $"Sincronização {importId} do catálogo: {importedCatalog.Companies.Count} empresas "
-                + $"encontradas, {createdCompanies.Count} criadas, {updatedCompanyCount} atualizadas, "
-                + $"{unseenCompanyCount} não vistas, {importedCatalog.Warnings.Count} avisos."),
+            synchronizedCompanies,
+            auditLog,
             cancellationToken);
 
         // Só as empresas novas são consultadas automaticamente. As já existentes

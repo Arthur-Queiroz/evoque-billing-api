@@ -17,13 +17,27 @@ namespace Evoque.Billing.Api.Services;
 public sealed class CompanyRegistryEnrichmentService(
     ICompanyRegistryGateway companyRegistryGateway,
     ICompanyRepository companyRepository,
-    IOptions<CompanyRegistryOptions> companyRegistryOptions)
+    IOptions<CompanyRegistryOptions> companyRegistryOptions,
+    ILogger<CompanyRegistryEnrichmentService> logger)
 {
     public async Task<CompanyRegistryLookupStatus> RefreshAsync(
         Company company,
         CancellationToken cancellationToken)
     {
-        var lookupResult = await companyRegistryGateway.FindByTaxIdAsync(company.TaxId, cancellationToken);
+        CompanyRegistryLookupResult lookupResult;
+        try
+        {
+            lookupResult = await companyRegistryGateway.FindByTaxIdAsync(company.TaxId, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            logger.LogWarning(
+                exception,
+                "A consulta cadastral inesperadamente falhou para o CNPJ {TaxId}.",
+                company.TaxId);
+            lookupResult = CompanyRegistryLookupResult.Unavailable();
+        }
+
         ApplyLookupResult(company, lookupResult);
         await companyRepository.UpsertAsync(company, cancellationToken);
         return lookupResult.Status;

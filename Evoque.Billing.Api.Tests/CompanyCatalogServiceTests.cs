@@ -4,6 +4,7 @@ using Evoque.Billing.Api.Integrations.CompanyRegistry;
 using Evoque.Billing.Api.Repositories;
 using Evoque.Billing.Api.Services;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace Evoque.Billing.Api.Tests;
@@ -205,6 +206,55 @@ public sealed class CompanyCatalogServiceTests
     }
 
     [Fact]
+    public async Task CreateAsync_InvalidBillingDayDoesNotPersistTheCompany()
+    {
+        var catalog = CreateCatalog();
+
+        await Assert.ThrowsAsync<ValidationException>(() => catalog.Service.CreateAsync(
+            new CreateCompanyRequest(OpenSportsTaxId, "Open Sports", 3, null, null, OperatorId),
+            CancellationToken.None));
+
+        Assert.Empty(catalog.DataStore.Companies);
+        Assert.Empty(catalog.DataStore.CompanyBillingSchedules);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_InvalidBillingDayDoesNotPersistAnyChange()
+    {
+        var catalog = CreateCatalog();
+        await catalog.Service.CreateAsync(
+            new CreateCompanyRequest(OpenSportsTaxId, "Open Sports", 20, null, null, OperatorId),
+            CancellationToken.None);
+
+        await Assert.ThrowsAsync<ValidationException>(() => catalog.Service.UpdateAsync(
+            OpenSportsTaxId,
+            new UpdateCompanyRequest("Nome que não deve ser salvo", 3, "cus_invalido", null, OperatorId),
+            CancellationToken.None));
+
+        var company = await catalog.Service.GetAsync(OpenSportsTaxId, CancellationToken.None);
+        Assert.Equal("Open Sports", company.DisplayName);
+        Assert.Equal(20, company.BillingDay);
+        Assert.Null(company.AsaasSandboxCustomerId);
+    }
+
+    [Fact]
+    public async Task SynchronizeAsync_CompletesWhenTheRegistryGatewayThrowsUnexpectedly()
+    {
+        var catalog = CreateCatalog(new ThrowingCompanyRegistryGateway());
+
+        var result = await catalog.ImportService.SynchronizeAsync(
+            CreateEvoExport(["Pessoa Um", "Plano", $"Open Sports - {OpenSportsTaxId}", ""]),
+            OperatorId,
+            CancellationToken.None);
+
+        Assert.Equal(1, result.CreatedCompanyCount);
+        Assert.Equal(1, result.RegistryUnavailableCount);
+        Assert.Single(catalog.DataStore.Companies);
+        Assert.Single(catalog.DataStore.CompanyCatalogImports);
+        Assert.Single(catalog.DataStore.AuditLogs);
+    }
+
+    [Fact]
     public async Task DeactivateAndReactivate_ChangeTheStatusWithoutDeletingTheCompany()
     {
         var catalog = CreateCatalog();
@@ -388,7 +438,8 @@ public sealed class CompanyCatalogServiceTests
         var enrichmentService = new CompanyRegistryEnrichmentService(
             companyRegistryGateway ?? new StubCompanyRegistryGateway(CompanyRegistryLookupStatus.Found),
             companyRepository,
-            Options.Create(new CompanyRegistryOptions()));
+            Options.Create(new CompanyRegistryOptions()),
+            NullLogger<CompanyRegistryEnrichmentService>.Instance);
 
         return new TestCatalog(
             new CompanyCatalogService(
@@ -402,8 +453,7 @@ public sealed class CompanyCatalogServiceTests
                 new CompanyCatalogSpreadsheetReader(new SpreadsheetWorkbookReader()),
                 companyRepository,
                 companyCatalogImportRepository,
-                enrichmentService,
-                auditLogRepository),
+                enrichmentService),
             dataStore);
     }
 
@@ -462,6 +512,16 @@ public sealed class CompanyCatalogServiceTests
                         "SANTO ANDRE",
                         "SP",
                         "09080370"));
+        }
+    }
+
+    private sealed class ThrowingCompanyRegistryGateway : ICompanyRegistryGateway
+    {
+        public Task<CompanyRegistryLookupResult> FindByTaxIdAsync(
+            string taxId,
+            CancellationToken cancellationToken)
+        {
+            throw new InvalidOperationException("Falha externa simulada.");
         }
     }
 }

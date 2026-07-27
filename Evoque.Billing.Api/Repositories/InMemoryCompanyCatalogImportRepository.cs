@@ -8,10 +8,18 @@ public sealed class InMemoryCompanyCatalogImportRepository(InMemoryBillingDataSt
     public Task AddAsync(
         CompanyCatalogImport companyCatalogImport,
         IReadOnlyCollection<CompanyCatalogImportMember> importedMembers,
+        IReadOnlyCollection<Company> synchronizedCompanies,
+        AuditLog auditLog,
         CancellationToken cancellationToken)
     {
+        foreach (var company in synchronizedCompanies)
+        {
+            dataStore.Companies[company.TaxId] = company;
+        }
+
         dataStore.CompanyCatalogImports[companyCatalogImport.Id] = companyCatalogImport;
         dataStore.CompanyCatalogImportMembers[companyCatalogImport.Id] = importedMembers;
+        dataStore.AuditLogs[auditLog.Id] = auditLog;
         return Task.CompletedTask;
     }
 

@@ -9,11 +9,23 @@ public sealed class MySqlCompanyCatalogImportRepository(MySqlConnectionFactory c
     public async Task AddAsync(
         CompanyCatalogImport companyCatalogImport,
         IReadOnlyCollection<CompanyCatalogImportMember> importedMembers,
+        IReadOnlyCollection<Company> synchronizedCompanies,
+        AuditLog auditLog,
         CancellationToken cancellationToken)
     {
         await using var connection = connectionFactory.CreateConnection();
         await connection.OpenAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        foreach (var company in synchronizedCompanies)
+        {
+            await using var companyCommand = new MySqlCommand(
+                MySqlCompanyRepository.UpsertCommandText,
+                connection,
+                transaction);
+            MySqlCompanyRepository.AddParameters(companyCommand, company);
+            await companyCommand.ExecuteNonQueryAsync(cancellationToken);
+        }
 
         await using (var importCommand = new MySqlCommand(
             """
@@ -72,6 +84,15 @@ public sealed class MySqlCompanyCatalogImportRepository(MySqlConnectionFactory c
                 "@contractName",
                 (object?)importedMember.ContractName ?? DBNull.Value);
             await memberCommand.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        await using (var auditCommand = new MySqlCommand(
+            MySqlAuditLogRepository.InsertCommandText,
+            connection,
+            transaction))
+        {
+            MySqlAuditLogRepository.AddParameters(auditCommand, auditLog);
+            await auditCommand.ExecuteNonQueryAsync(cancellationToken);
         }
 
         await transaction.CommitAsync(cancellationToken);

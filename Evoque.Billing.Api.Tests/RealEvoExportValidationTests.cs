@@ -48,7 +48,7 @@ public sealed class RealEvoExportValidationTests
         string expectedEvoName,
         int expectedMemberCount)
     {
-        var company = Assert.Single(catalog.Companies.Where(candidate => candidate.TaxId == taxId));
+        var company = Assert.Single(catalog.Companies, candidate => candidate.TaxId == taxId);
         Assert.Equal(expectedEvoName, company.EvoName);
         Assert.Equal(expectedMemberCount, company.Members.Count);
     }

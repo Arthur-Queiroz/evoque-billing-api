@@ -5,6 +5,53 @@ namespace Evoque.Billing.Api.Repositories;
 
 public sealed class MySqlCompanyRepository(MySqlConnectionFactory connectionFactory) : ICompanyRepository
 {
+    internal const string UpsertCommandText = """
+        INSERT INTO companies
+            (tax_id, display_name, evo_name, legal_name, trade_name, registration_status,
+             registry_street, registry_number, registry_complement, registry_neighborhood,
+             registry_city, registry_state, registry_postal_code,
+             registry_lookup_status, registry_last_checked_at,
+             is_active, source, last_imported_member_count, first_seen_at, last_seen_at,
+             last_import_id, requires_review_after_reappearing,
+             asaas_sandbox_customer_id, asaas_production_customer_id,
+             created_by, created_at, updated_by, updated_at)
+        VALUES
+            (@taxId, @displayName, @evoName, @legalName, @tradeName, @registrationStatus,
+             @registryStreet, @registryNumber, @registryComplement, @registryNeighborhood,
+             @registryCity, @registryState, @registryPostalCode,
+             @registryLookupStatus, @registryLastCheckedAt,
+             @isActive, @source, @lastImportedMemberCount, @firstSeenAt, @lastSeenAt,
+             @lastImportId, @requiresReviewAfterReappearing,
+             @asaasSandboxCustomerId, @asaasProductionCustomerId,
+             @createdBy, @createdAt, @updatedBy, @updatedAt)
+        ON DUPLICATE KEY UPDATE
+            display_name = VALUES(display_name),
+            evo_name = VALUES(evo_name),
+            legal_name = VALUES(legal_name),
+            trade_name = VALUES(trade_name),
+            registration_status = VALUES(registration_status),
+            registry_street = VALUES(registry_street),
+            registry_number = VALUES(registry_number),
+            registry_complement = VALUES(registry_complement),
+            registry_neighborhood = VALUES(registry_neighborhood),
+            registry_city = VALUES(registry_city),
+            registry_state = VALUES(registry_state),
+            registry_postal_code = VALUES(registry_postal_code),
+            registry_lookup_status = VALUES(registry_lookup_status),
+            registry_last_checked_at = VALUES(registry_last_checked_at),
+            is_active = VALUES(is_active),
+            source = VALUES(source),
+            last_imported_member_count = VALUES(last_imported_member_count),
+            first_seen_at = VALUES(first_seen_at),
+            last_seen_at = VALUES(last_seen_at),
+            last_import_id = VALUES(last_import_id),
+            requires_review_after_reappearing = VALUES(requires_review_after_reappearing),
+            asaas_sandbox_customer_id = VALUES(asaas_sandbox_customer_id),
+            asaas_production_customer_id = VALUES(asaas_production_customer_id),
+            updated_by = VALUES(updated_by),
+            updated_at = VALUES(updated_at);
+        """;
+
     private const string SelectColumns = """
         SELECT tax_id, display_name, evo_name, legal_name, trade_name, registration_status,
                registry_street, registry_number, registry_complement, registry_neighborhood,
@@ -46,61 +93,14 @@ public sealed class MySqlCompanyRepository(MySqlConnectionFactory connectionFact
 
     public async Task UpsertAsync(Company company, CancellationToken cancellationToken)
     {
-        const string commandText = """
-            INSERT INTO companies
-                (tax_id, display_name, evo_name, legal_name, trade_name, registration_status,
-                 registry_street, registry_number, registry_complement, registry_neighborhood,
-                 registry_city, registry_state, registry_postal_code,
-                 registry_lookup_status, registry_last_checked_at,
-                 is_active, source, last_imported_member_count, first_seen_at, last_seen_at,
-                 last_import_id, requires_review_after_reappearing,
-                 asaas_sandbox_customer_id, asaas_production_customer_id,
-                 created_by, created_at, updated_by, updated_at)
-            VALUES
-                (@taxId, @displayName, @evoName, @legalName, @tradeName, @registrationStatus,
-                 @registryStreet, @registryNumber, @registryComplement, @registryNeighborhood,
-                 @registryCity, @registryState, @registryPostalCode,
-                 @registryLookupStatus, @registryLastCheckedAt,
-                 @isActive, @source, @lastImportedMemberCount, @firstSeenAt, @lastSeenAt,
-                 @lastImportId, @requiresReviewAfterReappearing,
-                 @asaasSandboxCustomerId, @asaasProductionCustomerId,
-                 @createdBy, @createdAt, @updatedBy, @updatedAt)
-            ON DUPLICATE KEY UPDATE
-                display_name = VALUES(display_name),
-                evo_name = VALUES(evo_name),
-                legal_name = VALUES(legal_name),
-                trade_name = VALUES(trade_name),
-                registration_status = VALUES(registration_status),
-                registry_street = VALUES(registry_street),
-                registry_number = VALUES(registry_number),
-                registry_complement = VALUES(registry_complement),
-                registry_neighborhood = VALUES(registry_neighborhood),
-                registry_city = VALUES(registry_city),
-                registry_state = VALUES(registry_state),
-                registry_postal_code = VALUES(registry_postal_code),
-                registry_lookup_status = VALUES(registry_lookup_status),
-                registry_last_checked_at = VALUES(registry_last_checked_at),
-                is_active = VALUES(is_active),
-                source = VALUES(source),
-                last_imported_member_count = VALUES(last_imported_member_count),
-                first_seen_at = VALUES(first_seen_at),
-                last_seen_at = VALUES(last_seen_at),
-                last_import_id = VALUES(last_import_id),
-                requires_review_after_reappearing = VALUES(requires_review_after_reappearing),
-                asaas_sandbox_customer_id = VALUES(asaas_sandbox_customer_id),
-                asaas_production_customer_id = VALUES(asaas_production_customer_id),
-                updated_by = VALUES(updated_by),
-                updated_at = VALUES(updated_at);
-            """;
-
         await using var connection = connectionFactory.CreateConnection();
         await connection.OpenAsync(cancellationToken);
-        await using var command = new MySqlCommand(commandText, connection);
+        await using var command = new MySqlCommand(UpsertCommandText, connection);
         AddParameters(command, company);
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
-    private static void AddParameters(MySqlCommand command, Company company)
+    internal static void AddParameters(MySqlCommand command, Company company)
     {
         command.Parameters.AddWithValue("@taxId", company.TaxId);
         command.Parameters.AddWithValue("@displayName", company.DisplayName);

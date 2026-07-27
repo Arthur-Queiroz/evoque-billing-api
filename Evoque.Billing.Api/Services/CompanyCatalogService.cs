@@ -47,6 +47,7 @@ public sealed class CompanyCatalogService(
         CancellationToken cancellationToken)
     {
         var normalizedTaxId = CompanyTaxId.Normalize(request.TaxId);
+        ValidateOptionalBillingDay(request.BillingDay);
         var existingCompany = await companyRepository.FindByTaxIdAsync(normalizedTaxId, cancellationToken);
         if (existingCompany is not null)
         {
@@ -83,6 +84,7 @@ public sealed class CompanyCatalogService(
         CancellationToken cancellationToken)
     {
         var company = await RequireCompanyAsync(taxId, cancellationToken);
+        ValidateOptionalBillingDay(request.BillingDay);
         var updatedAt = DateTimeOffset.UtcNow;
         company.UpdateManualData(
             request.DisplayName,
@@ -358,6 +360,14 @@ public sealed class CompanyCatalogService(
         }
 
         await DeactivateScheduleAsync(company, operatorId, cancellationToken);
+    }
+
+    private static void ValidateOptionalBillingDay(int? billingDay)
+    {
+        if (billingDay is not null)
+        {
+            CompanyBillingSchedule.ValidateBillingDay(billingDay.Value);
+        }
     }
 
     private async Task DeactivateScheduleAsync(

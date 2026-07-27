@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Net.Http.Json;
 using Evoque.Billing.Api.Domain;
@@ -58,6 +59,22 @@ public sealed class BrasilApiCompanyRegistryGateway : ICompanyRegistryGateway
             logger.LogWarning(
                 exception,
                 "A consulta cadastral do CNPJ {TaxId} falhou.",
+                normalizedTaxId);
+            return CompanyRegistryLookupResult.Unavailable();
+        }
+        catch (JsonException exception)
+        {
+            logger.LogWarning(
+                exception,
+                "O cadastro público devolveu JSON inválido para o CNPJ {TaxId}.",
+                normalizedTaxId);
+            return CompanyRegistryLookupResult.Unavailable();
+        }
+        catch (NotSupportedException exception)
+        {
+            logger.LogWarning(
+                exception,
+                "O cadastro público devolveu conteúdo incompatível para o CNPJ {TaxId}.",
                 normalizedTaxId);
             return CompanyRegistryLookupResult.Unavailable();
         }

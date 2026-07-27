@@ -20,5 +20,6 @@ public sealed class InMemoryBillingDataStore
     public ConcurrentDictionary<Guid, CompanyCatalogImport> CompanyCatalogImports { get; } = new();
 
     public ConcurrentDictionary<Guid, IReadOnlyCollection<CompanyCatalogImportMember>>
-        CompanyCatalogImportMembers { get; } = new();
+        CompanyCatalogImportMembers
+    { get; } = new();
 }

@@ -7,6 +7,8 @@ public interface ICompanyCatalogImportRepository
     Task AddAsync(
         CompanyCatalogImport companyCatalogImport,
         IReadOnlyCollection<CompanyCatalogImportMember> importedMembers,
+        IReadOnlyCollection<Company> synchronizedCompanies,
+        AuditLog auditLog,
         CancellationToken cancellationToken);
 
     Task<CompanyCatalogImport?> FindLatestAsync(CancellationToken cancellationToken);

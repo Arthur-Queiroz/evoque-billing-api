@@ -29,9 +29,9 @@ Preencha `/opt/evoque/production.env` a partir de
 
 ```text
 MYSQL_PASSWORD=preenchido-pelo-github-actions
-ASAAS__INTEGRATIONENVIRONMENT=Sandbox
-ASAAS__BASEURL=https://api-sandbox.asaas.com/v3/
-ASAAS__ALLOWCHARGECREATION=true
+ASAAS__APIKEY=preenchido-pelo-github-actions
+EVO__USERNAME=preenchido-pelo-github-actions
+EVO__APIKEY=preenchido-pelo-github-actions
 ```
 
 `MYSQL_PASSWORD` vem do Secret de ambiente do GitHub e é atualizado pela
@@ -39,8 +39,9 @@ pipeline. Não copie a senha para o repositório nem a informe no terminal da
 VPS. Depois que o volume do MySQL existe, não troque somente esse Secret: a
 rotação precisa atualizar o usuário interno e o Secret no mesmo procedimento.
 
-`true` autoriza somente boletos de teste no Sandbox. Para produção, a troca de
-ambiente e a autorização operacional devem ocorrer juntas e de forma explícita.
+O Compose fixa o ambiente, a URL e a criação de cobranças no Asaas Sandbox.
+Para produção, a troca de ambiente e a autorização operacional devem ocorrer
+juntas, em alteração revisada de código.
 
 O proxy HTTPS da KVM2 deve encaminhar o domínio para `127.0.0.1:8085`.
 
@@ -53,8 +54,9 @@ Em **ambos** os repositórios, configure:
 - Variable `KVM2_DEPLOY_HOST`;
 - Variable `KVM2_CLOUDFLARE_SSH_HOST`, por exemplo `ssh.devarthur.com.br`.
 
-No repositório da API, configure também o Environment Secret
-`MYSQL_PASSWORD` no ambiente `production`.
+No repositório da API, configure também os Environment Secrets
+`MYSQL_PASSWORD`, `ASAAS_API_KEY`, `EVO_USERNAME` e `EVO_API_KEY` no ambiente
+`production`.
 
 A chave pública correspondente deve estar em `/root/.ssh/authorized_keys`. O
 Cloudflare Access precisa encaminhar o hostname SSH para a porta 22 da VPS.

@@ -35,12 +35,11 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ConnectionStrings__BillingDatabase: "Server=mysql;Port=3306;Database=evoque_billing;User ID=evoque_billing_app;Password=${MYSQL_PASSWORD};SslMode=None;AllowPublicKeyRetrieval=True"
-      Cors__AllowedOrigins__0: ${PUBLIC_APPLICATION_URL}
-      Asaas__IntegrationEnvironment: ${ASAAS__INTEGRATIONENVIRONMENT}
-      Asaas__BaseUrl: ${ASAAS__BASEURL}
+      Asaas__IntegrationEnvironment: Sandbox
+      Asaas__BaseUrl: https://api-sandbox.asaas.com/v3/
       Asaas__ApiKey: ${ASAAS__APIKEY}
-      Asaas__AllowChargeCreation: ${ASAAS__ALLOWCHARGECREATION}
-      Evo__BaseUrl: ${EVO__BASEURL:-}
+      Asaas__AllowChargeCreation: "true"
+      Evo__BaseUrl: https://evo-integracao-api.w12app.com.br
       Evo__Username: ${EVO__USERNAME:-}
       Evo__ApiKey: ${EVO__APIKEY:-}
     restart: unless-stopped

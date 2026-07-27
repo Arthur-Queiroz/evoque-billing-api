@@ -17,18 +17,23 @@ e nenhum operador executa `docker compose up` manualmente para publicar código.
 
 ## Configuração externa obrigatória
 
-- GitHub Secrets: `KVM2_DEPLOY_SSH_PRIVATE_KEY` e `MYSQL_PASSWORD`, ambos no
-  ambiente `production`;
+- GitHub Secret de repositório: `KVM2_DEPLOY_SSH_PRIVATE_KEY`;
+- GitHub Environment Secrets em `production`: `MYSQL_PASSWORD`,
+  `ASAAS_API_KEY`, `EVO_USERNAME` e `EVO_API_KEY`;
 - GitHub Variables: `DEPLOY_ENABLED`, `KVM2_DEPLOY_HOST`,
   `KVM2_CLOUDFLARE_SSH_HOST`;
 - VPS: Docker, Docker Compose, Cloudflared e `/opt/evoque/production.env`;
 - Proxy HTTPS externo: encaminha o domínio para `127.0.0.1:8085`.
 
 O arquivo completo `production.env` nunca é enviado pelo workflow. A pipeline
-atualiza somente `MYSQL_PASSWORD`, recebida do GitHub Environment Secret; as
-demais configurações permanecem sob controle da VPS. Durante o MVP, o arquivo
-usa somente credenciais Sandbox do Asaas. Uma alteração para Produção exige
-revisão humana das variáveis e das regras de negócio.
+atualiza somente as quatro credenciais recebidas dos GitHub Environment
+Secrets. O Compose fixa URL, ambiente e autorização no Asaas Sandbox durante o
+MVP. Uma alteração para Produção exige revisão humana do Compose e das regras
+de negócio.
+
+Web e API são servidos pelo mesmo proxy e domínio. Por isso o CORS fica fechado
+por padrão em produção. `Cors:AllowedOrigins` só deve ser configurado quando
+existir um consumidor web em uma origem HTTPS diferente.
 
 ## Banco e recuperação
 

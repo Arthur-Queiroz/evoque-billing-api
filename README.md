@@ -129,8 +129,9 @@ dotnet user-secrets set "ConnectionStrings:BillingDatabase" "Server=localhost;Po
 
 Em produção, o MySQL 8.4 roda como serviço interno do Compose, sem porta
 pública, com dados no volume persistente `mysql_data`. O workflow recebe a
-senha pelo secret `MYSQL_PASSWORD` do ambiente `production` e atualiza o
-arquivo protegido da VPS antes do deploy, sem registrar o valor nos logs.
+senha e as credenciais das integrações pelos Environment Secrets
+`MYSQL_PASSWORD`, `ASAAS_API_KEY`, `EVO_USERNAME` e `EVO_API_KEY`, e atualiza o
+arquivo protegido da VPS antes do deploy, sem registrar os valores nos logs.
 
 No primeiro uso, a aplicação registra migrations em `schema_migrations` e cria
 apenas as tabelas do novo produto, inclusive `charge_batches`,
@@ -140,8 +141,9 @@ apenas as tabelas do novo produto, inclusive `charge_batches`,
 
 `GET /health` responde somente se a API estiver disponível e, quando há banco
 configurado, se a consulta ao banco funcionar. Em produção, a API valida na
-inicialização a connection string, chave do Asaas, URL HTTPS do Asaas e origens
-CORS HTTPS; configuração insegura impede o processo de iniciar.
+inicialização a connection string, chave do Asaas e URL HTTPS do Asaas. O CORS
+fica fechado por padrão e aceita somente origens HTTPS quando explicitamente
+configurado; configuração insegura impede o processo de iniciar.
 
 ## Verificação
 

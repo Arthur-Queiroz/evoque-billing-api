@@ -7,15 +7,21 @@ using Evoque.Billing.Api.Services;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
-var allowedCorsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
-    ?? ["http://localhost:3000", "http://127.0.0.1:3000"];
+var configuredCorsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();
+var allowedCorsOrigins = configuredCorsOrigins
+    ?? (builder.Environment.IsDevelopment()
+        ? ["http://localhost:3000", "http://127.0.0.1:3000"]
+        : []);
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("WebClient", policy =>
     {
-        policy.WithOrigins(allowedCorsOrigins)
-            .AllowAnyHeader()
-            .AllowAnyMethod();
+        if (allowedCorsOrigins.Length > 0)
+        {
+            policy.WithOrigins(allowedCorsOrigins)
+                .AllowAnyHeader()
+                .AllowAnyMethod();
+        }
     });
 });
 builder.Services.AddHttpClient<AsaasChargeGateway>();

@@ -31,11 +31,13 @@ public sealed class CompanyCatalogImportsController(
     public async Task<ActionResult<CompanyCatalogImportResponse>> SynchronizeAsync(
         [FromForm] IFormFile file,
         [FromForm] string operatorId,
+        [FromForm] bool completeSnapshotConfirmed,
         CancellationToken cancellationToken)
     {
         var result = await companyCatalogImportService.SynchronizeAsync(
             file,
             operatorId,
+            completeSnapshotConfirmed,
             cancellationToken);
         return StatusCode(StatusCodes.Status201Created, result);
     }

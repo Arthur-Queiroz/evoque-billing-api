@@ -145,12 +145,10 @@ public sealed class Company
     public static Company CreateManually(
         string taxId,
         string displayName,
-        string? asaasSandboxCustomerId,
-        string? asaasProductionCustomerId,
         string operatorId,
         DateTimeOffset createdAt)
     {
-        var company = new Company(
+        return new Company(
             CompanyTaxId.Normalize(taxId),
             RequireText(displayName, "O nome operacional da empresa é obrigatório."),
             evoName: null,
@@ -158,9 +156,6 @@ public sealed class Company
             isActive: true,
             RequireText(operatorId, "O responsável pelo cadastro é obrigatório."),
             createdAt);
-        company.AsaasSandboxCustomerId = TrimToNull(asaasSandboxCustomerId);
-        company.AsaasProductionCustomerId = TrimToNull(asaasProductionCustomerId);
-        return company;
     }
 
     /// <summary>
@@ -272,15 +267,37 @@ public sealed class Company
 
     public void UpdateManualData(
         string displayName,
-        string? asaasSandboxCustomerId,
-        string? asaasProductionCustomerId,
         string operatorId,
         DateTimeOffset updatedAt)
     {
         DisplayName = RequireText(displayName, "O nome operacional da empresa é obrigatório.");
-        AsaasSandboxCustomerId = TrimToNull(asaasSandboxCustomerId);
-        AsaasProductionCustomerId = TrimToNull(asaasProductionCustomerId);
         RegisterUpdate(operatorId, updatedAt);
+    }
+
+    /// <summary>
+    /// Registra um cliente localizado automaticamente pelo CNPJ. O identificador
+    /// nunca é aceito de um formulário porque pertence à integração, não ao
+    /// cadastro operacional da empresa.
+    /// </summary>
+    public void LinkAsaasCustomer(
+        AsaasEnvironment asaasEnvironment,
+        string asaasCustomerId,
+        string operatorId,
+        DateTimeOffset linkedAt)
+    {
+        var normalizedCustomerId = RequireText(
+            asaasCustomerId,
+            "O identificador do cliente Asaas é obrigatório.");
+        if (asaasEnvironment == AsaasEnvironment.Sandbox)
+        {
+            AsaasSandboxCustomerId = normalizedCustomerId;
+        }
+        else
+        {
+            AsaasProductionCustomerId = normalizedCustomerId;
+        }
+
+        RegisterUpdate(operatorId, linkedAt);
     }
 
     public void Deactivate(string operatorId, DateTimeOffset deactivatedAt)

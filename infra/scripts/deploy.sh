@@ -11,6 +11,7 @@ if [ ! -f "$environment_file" ]; then
 fi
 
 cd "$release_directory"
+sh infra/scripts/backup-mysql.sh "$release_directory"
 docker compose --env-file "$environment_file" -f "$compose_file" pull
 docker compose --env-file "$environment_file" -f "$compose_file" up -d --remove-orphans
 docker compose --env-file "$environment_file" -f "$compose_file" ps
@@ -32,4 +33,3 @@ done
 
 echo "A aplicação não respondeu ao health check: $health_url" >&2
 exit 1
-

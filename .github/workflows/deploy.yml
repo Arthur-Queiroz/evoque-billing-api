@@ -74,11 +74,16 @@ jobs:
       - name: Atualizar runtime da VPS
         env:
           RELEASE_NAME: ${{ github.sha }}
+          MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
         run: |
           set -eu
+          test -n "$MYSQL_PASSWORD"
           release_directory="/opt/evoque/releases/api-$RELEASE_NAME"
           ssh kvm2-evoque "install -d -m 700 '$release_directory'"
           tar --exclude-vcs -czf - . | ssh kvm2-evoque "tar -xzf - -C '$release_directory'"
+          printf '%s' "$MYSQL_PASSWORD" |
+            ssh kvm2-evoque \
+              "sh '$release_directory/infra/scripts/set-production-secret.sh' MYSQL_PASSWORD"
           ssh kvm2-evoque "
             set -eu
             test -f /opt/evoque/production.env

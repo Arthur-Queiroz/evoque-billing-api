@@ -14,6 +14,8 @@ namespace Evoque.Billing.Api.Services;
 public sealed class CompanyCatalogService(
     ICompanyRepository companyRepository,
     ICompanyCatalogImportRepository companyCatalogImportRepository,
+    ICorporateMemberRepository corporateMemberRepository,
+    CorporateMemberService corporateMemberService,
     ICompanyBillingScheduleRepository companyBillingScheduleRepository,
     IBillingDraftRepository billingDraftRepository,
     CompanyRegistryEnrichmentService companyRegistryEnrichmentService,
@@ -26,12 +28,14 @@ public sealed class CompanyCatalogService(
         var companies = await companyRepository.ListAsync(cancellationToken);
         var schedulesByCompany = await ReadSchedulesByCompanyAsync(cancellationToken);
         var latestImportId = await ReadLatestImportIdAsync(cancellationToken);
+        var memberCountsByCompany = await ReadActiveMemberCountsByCompanyAsync(cancellationToken);
 
         return companies
             .Select(company => CompanyResponse.FromDomain(
                 company,
                 schedulesByCompany.GetValueOrDefault(company.TaxId),
-                latestImportId))
+                latestImportId,
+                memberCountsByCompany.GetValueOrDefault(company.TaxId)))
             .Where(companyResponse => MatchesQuery(companyResponse, query))
             .ToArray();
     }
@@ -56,25 +60,39 @@ public sealed class CompanyCatalogService(
         }
 
         var createdAt = DateTimeOffset.UtcNow;
+        var requestedDisplayName = request.DisplayName?.Trim();
+        var fallbackDisplayName = $"Empresa {CompanyTaxId.Format(normalizedTaxId)}";
         var company = Company.CreateManually(
             normalizedTaxId,
-            request.DisplayName,
-            request.AsaasSandboxCustomerId,
-            request.AsaasProductionCustomerId,
+            string.IsNullOrWhiteSpace(requestedDisplayName)
+                ? fallbackDisplayName
+                : requestedDisplayName,
             request.OperatorId,
             createdAt);
         await companyRepository.UpsertAsync(company, cancellationToken);
         await ApplyBillingDayAsync(company, request.BillingDay, request.OperatorId, cancellationToken);
+
+        // O CNPJ é suficiente para o cadastro. Quando o operador não informa
+        // um nome, o cadastro público fornece o nome fantasia ou a razão social.
+        // Se a consulta estiver indisponível, a empresa continua cadastrada com
+        // um nome provisório e pode ser editada depois.
+        await companyRegistryEnrichmentService.RefreshAsync(company, cancellationToken);
+        if (string.IsNullOrWhiteSpace(requestedDisplayName))
+        {
+            var registryDisplayName = company.TradeName ?? company.LegalName;
+            if (!string.IsNullOrWhiteSpace(registryDisplayName))
+            {
+                company.UpdateManualData(registryDisplayName, request.OperatorId, DateTimeOffset.UtcNow);
+                await companyRepository.UpsertAsync(company, cancellationToken);
+            }
+        }
+
         await RegisterAuditAsync(
             "company.created",
             request.OperatorId,
             createdAt,
             $"Empresa {company.DisplayName} ({CompanyTaxId.Format(company.TaxId)}) cadastrada manualmente.",
             cancellationToken);
-
-        // Uma empresa nova ainda não tem dados cadastrais; consultar aqui evita
-        // que a tela precise disparar a consulta a cada abertura.
-        await companyRegistryEnrichmentService.RefreshAsync(company, cancellationToken);
         return await CreateResponseAsync(company, cancellationToken);
     }
 
@@ -88,8 +106,6 @@ public sealed class CompanyCatalogService(
         var updatedAt = DateTimeOffset.UtcNow;
         company.UpdateManualData(
             request.DisplayName,
-            request.AsaasSandboxCustomerId,
-            request.AsaasProductionCustomerId,
             request.OperatorId,
             updatedAt);
         await companyRepository.UpsertAsync(company, cancellationToken);
@@ -159,15 +175,16 @@ public sealed class CompanyCatalogService(
         return await CreateResponseAsync(company, cancellationToken);
     }
 
-    public async Task<IReadOnlyCollection<CompanyMemberResponse>> ListMembersAsync(
+    public async Task<IReadOnlyCollection<CorporateMemberResponse>> ListMembersAsync(
         string taxId,
         CancellationToken cancellationToken)
     {
         var company = await RequireCompanyAsync(taxId, cancellationToken);
-        var importedMembers = await companyCatalogImportRepository.ListLatestMembersByCompanyAsync(
-            company.TaxId,
+        return await corporateMemberService.ListAsync(
+            new ListCorporateMembersQuery(
+                Status: "all",
+                CompanyTaxId: company.TaxId),
             cancellationToken);
-        return importedMembers.Select(CompanyMemberResponse.FromDomain).ToArray();
     }
 
     public async Task<IReadOnlyCollection<CompanyBillingHistoryEntryResponse>> ListBillingHistoryAsync(
@@ -193,6 +210,7 @@ public sealed class CompanyCatalogService(
             billingDay,
             cancellationToken);
         var latestImportId = await ReadLatestImportIdAsync(cancellationToken);
+        var memberCountsByCompany = await ReadActiveMemberCountsByCompanyAsync(cancellationToken);
 
         var companies = new List<CompanyResponse>();
         foreach (var schedule in schedules)
@@ -205,7 +223,11 @@ public sealed class CompanyCatalogService(
                 continue;
             }
 
-            companies.Add(CompanyResponse.FromDomain(company, schedule, latestImportId));
+            companies.Add(CompanyResponse.FromDomain(
+                company,
+                schedule,
+                latestImportId,
+                memberCountsByCompany.GetValueOrDefault(company.TaxId)));
         }
 
         return companies
@@ -317,10 +339,25 @@ public sealed class CompanyCatalogService(
     {
         var schedulesByCompany = await ReadSchedulesByCompanyAsync(cancellationToken);
         var latestImportId = await ReadLatestImportIdAsync(cancellationToken);
+        var memberCountsByCompany = await ReadActiveMemberCountsByCompanyAsync(cancellationToken);
         return CompanyResponse.FromDomain(
             company,
             schedulesByCompany.GetValueOrDefault(company.TaxId),
-            latestImportId);
+            latestImportId,
+            memberCountsByCompany.GetValueOrDefault(company.TaxId));
+    }
+
+    private async Task<Dictionary<string, int?>> ReadActiveMemberCountsByCompanyAsync(
+        CancellationToken cancellationToken)
+    {
+        var corporateMembers = await corporateMemberRepository.ListAsync(cancellationToken);
+        var memberCountsByCompany = corporateMembers
+            .GroupBy(member => member.CompanyTaxId, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => (int?)group.Count(member => member.IsActive),
+                StringComparer.Ordinal);
+        return memberCountsByCompany;
     }
 
     private async Task<Dictionary<string, CompanyBillingSchedule>> ReadSchedulesByCompanyAsync(

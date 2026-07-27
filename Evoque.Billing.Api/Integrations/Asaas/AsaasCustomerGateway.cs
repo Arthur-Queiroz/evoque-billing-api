@@ -57,17 +57,26 @@ public sealed class AsaasCustomerGateway(
             responseData.TotalCount);
     }
 
-    public async Task<AsaasCustomer?> FindSandboxByTaxIdAsync(
+    public async Task<AsaasCustomerLookupResult> FindByTaxIdAsync(
+        AsaasEnvironment asaasEnvironment,
         string taxId,
         CancellationToken cancellationToken)
     {
-        var responseData = await ListSandboxAsync(
+        var responseData = await ListByEnvironmentAsync(
+            asaasEnvironment,
             $"cpfCnpj={Uri.EscapeDataString(taxId)}&offset=0&limit=2",
             cancellationToken);
-        return responseData.Data
-            .Where(customer => string.Equals(customer.CpfCnpj, taxId, StringComparison.Ordinal))
+        var matchingCustomers = responseData.Data
+            .Where(customer => NormalizeTaxId(customer.CpfCnpj) == taxId)
             .Select(ToDomain)
-            .SingleOrDefault();
+            .ToArray();
+
+        return matchingCustomers.Length switch
+        {
+            0 => AsaasCustomerLookupResult.NotFound(),
+            1 => AsaasCustomerLookupResult.Found(matchingCustomers[0]),
+            _ => AsaasCustomerLookupResult.Ambiguous(matchingCustomers.Length),
+        };
     }
 
     public async Task<AsaasCustomer> CreateSandboxAsync(
@@ -106,14 +115,15 @@ public sealed class AsaasCustomerGateway(
         return ToDomain(responseData);
     }
 
-    private async Task<AsaasCustomerListResponse> ListSandboxAsync(
+    private async Task<AsaasCustomerListResponse> ListByEnvironmentAsync(
+        AsaasEnvironment asaasEnvironment,
         string queryString,
         CancellationToken cancellationToken)
     {
-        var connectionOptions = asaasOptions.Value.GetConnection(AsaasEnvironment.Sandbox);
+        var connectionOptions = asaasOptions.Value.GetConnection(asaasEnvironment);
         AsaasOperationPolicy.ValidateReadOperation(
             hostEnvironment,
-            AsaasEnvironment.Sandbox,
+            asaasEnvironment,
             connectionOptions);
         AsaasOperationPolicy.ConfigureHttpClient(httpClient, connectionOptions);
 
@@ -121,13 +131,13 @@ public sealed class AsaasCustomerGateway(
         if (!response.IsSuccessStatusCode)
         {
             throw new ExternalOperationNotAllowedException(
-                "Não foi possível consultar o cliente no Asaas Sandbox.");
+                $"Não foi possível consultar o cliente no Asaas {asaasEnvironment}.");
         }
 
         return await response.Content.ReadFromJsonAsync<AsaasCustomerListResponse>(
             cancellationToken: cancellationToken)
             ?? throw new ExternalOperationNotAllowedException(
-                "O Asaas Sandbox retornou uma resposta inválida ao consultar clientes.");
+                $"O Asaas {asaasEnvironment} retornou uma resposta inválida ao consultar clientes.");
     }
 
     private static AsaasCustomer ToDomain(AsaasCustomerResponse customer)
@@ -138,6 +148,11 @@ public sealed class AsaasCustomerGateway(
             customer.CpfCnpj,
             customer.Email,
             customer.AdditionalEmails);
+    }
+
+    private static string NormalizeTaxId(string? taxId)
+    {
+        return new string((taxId ?? string.Empty).Where(char.IsAsciiDigit).ToArray());
     }
 
     private sealed record AsaasCustomerListResponse(

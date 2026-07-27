@@ -364,8 +364,6 @@ public sealed class BillingWorkflowTests
         var company = Company.CreateManually(
             openSportsTaxId,
             "Open Sports",
-            null,
-            null,
             "maria",
             DateTimeOffset.UtcNow);
         company.Deactivate("maria", DateTimeOffset.UtcNow);

@@ -18,12 +18,14 @@ O catálogo descobre empresas; o fechamento calcula valores. Eles compartilham
 apenas o parsing estrutural do XLSX, em `SpreadsheetWorkbookReader`.
 
 ```text
-Sincronização do catálogo            Prévia de faturamento
+Inclusão em lote no catálogo         Prévia de faturamento
 CompanyCatalogSpreadsheetReader      BillingSpreadsheetReader
 → exige empresa com CNPJ válido      → exige empresa, pessoa e valor > 0
 → aceita valor vazio/zero/inválido   → recusa a linha sem valor positivo
-→ agrupa pessoas por CNPJ            → agrupa itens por CNPJ
-→ upsert em `companies`              → BillingDraft pendente de revisão
+→ agrupa IdCliente e contratos/CNPJ  → agrupa itens por CNPJ
+→ insere apenas CNPJs inexistentes    → BillingDraft pendente de revisão
+→ ignora empresas já cadastradas
+→ compara snapshot de colaboradores
 → enriquecimento cadastral           → aprovação humana
                                      → lote Asaas Sandbox
 ```
@@ -37,14 +39,18 @@ protegida pela aprovação, confirmação textual e política de ambiente.
 ```text
 CompaniesController            → CompanyCatalogService
 CompanyCatalogImportsController → CompanyCatalogImportService
+CorporateMembersController      → CorporateMemberService
                                  ↘ CompanyRegistryEnrichmentService
                                     ↘ ICompanyRegistryGateway
-ICompanyRepository / ICompanyCatalogImportRepository → MySQL ou InMemory
+ICompanyRepository / ICompanyCatalogImportRepository /
+ICorporateMemberRepository → MySQL ou InMemory
 ```
 
 Os dois repositories têm implementação MySQL e InMemory, registradas
 explicitamente em `Program.cs`. O schema do catálogo é a migration
 `006_add_company_catalog`; migrations já aplicadas nunca são editadas.
+O CRM de colaboradores usa a migration `007_add_corporate_member_crm`, com
+`corporate_members` e `corporate_member_contracts`.
 
 ## Componentes
 
@@ -71,8 +77,13 @@ Controllers → Services → Repositories → MySQL
 - DTOs em `Contracts/` definem contratos HTTP.
 - Domínio em `Domain/` representa competências, prévias, agendas e lotes.
 - Gateways encapsulam HTTP externo e não conhecem controllers.
-- Migrations próprias são aplicadas pelo inicializador do schema; nunca aplicar
-  alterações ao banco legado da Evoque.
+- Migrations próprias são aplicadas pelo inicializador no database
+  `evoque_billing`, em uma instância MySQL 8.4 exclusiva do produto na KVM2.
+  O serviço não publica a porta 3306 e só é acessível pela rede interna do
+  Compose. Os dados ficam no volume persistente `mysql_data`.
+- O Azure MySQL da Evoque e o banco legado anterior não são destinos de
+  persistência deste produto. Uma futura migração ou integração com eles exige
+  decisão explícita, credenciais próprias e plano de reconciliação.
 
 ## Integrações
 
@@ -88,3 +99,9 @@ que persistir. Nunca é chamado durante um simples `GET /api/companies`.
 
 Asaas é acessado apenas pelo backend. O client recebe estado de integração,
 prévia e resultado, nunca tokens ou URLs autenticadas.
+
+O cliente Asaas é ligado à empresa pelo CNPJ, sem entrada manual de IDs. A
+sincronização Sandbox pode criar apenas um cliente espelho de teste com e-mail
+controlado. A sincronização Production executa somente `GET /customers` e
+persiste localmente o vínculo quando encontra um único resultado. Ela não
+possui caminho de criação ou atualização de cliente no Asaas.

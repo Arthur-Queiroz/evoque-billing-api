@@ -14,7 +14,8 @@ public sealed class CompanyCatalogServiceTests
     private const string OpenSportsTaxId = "56087276000103";
     private const string WebPradoTaxId = "43322169000170";
     private const string OperatorId = "operador@evoque";
-    private static readonly string[] EvoExportHeaders = ["Nome", "Contrato", "Profissão", "Valor do contrato"];
+    private static readonly string[] EvoExportHeaders =
+        ["IdCliente", "Nome", "IdContrato", "Contrato", "Profissão", "Valor do contrato"];
 
     [Fact]
     public async Task SynchronizeAsync_CreatesCompaniesFromRowsWithoutAnyAmount()
@@ -29,7 +30,7 @@ public sealed class CompanyCatalogServiceTests
             CancellationToken.None);
 
         Assert.Equal(2, result.CreatedCompanyCount);
-        Assert.Equal(0, result.UpdatedCompanyCount);
+        Assert.Equal(0, result.IgnoredExistingCompanyCount);
         var companies = await catalog.Service.ListAsync(new ListCompaniesQuery(), CancellationToken.None);
         Assert.Equal(2, companies.Count);
         Assert.All(companies, company => Assert.True(company.IsActive));
@@ -37,7 +38,7 @@ public sealed class CompanyCatalogServiceTests
     }
 
     [Fact]
-    public async Task SynchronizeAsync_PreservesDisplayNameScheduleStatusAndAsaasCustomers()
+    public async Task SynchronizeAsync_IgnoresAnExistingCompanyWithoutChangingAnyData()
     {
         var catalog = CreateCatalog();
         await catalog.ImportService.SynchronizeAsync(
@@ -46,10 +47,12 @@ public sealed class CompanyCatalogServiceTests
             CancellationToken.None);
         await catalog.Service.UpdateAsync(
             OpenSportsTaxId,
-            new UpdateCompanyRequest("Open Sports Matriz", 20, "cus_sandbox", "cus_producao", OperatorId),
+            new UpdateCompanyRequest("Open Sports Matriz", 20, OperatorId),
             CancellationToken.None);
+        LinkAsaasCustomer(catalog, OpenSportsTaxId, AsaasEnvironment.Sandbox, "cus_sandbox");
+        LinkAsaasCustomer(catalog, OpenSportsTaxId, AsaasEnvironment.Production, "cus_producao");
 
-        await catalog.ImportService.SynchronizeAsync(
+        var result = await catalog.ImportService.SynchronizeAsync(
             CreateEvoExport(
                 ["Pessoa Um", "Plano", $"OPEN SPORTS LTDA - {OpenSportsTaxId}", ""],
                 ["Pessoa Dois", "Plano", $"OPEN SPORTS LTDA - {OpenSportsTaxId}", ""]),
@@ -57,8 +60,10 @@ public sealed class CompanyCatalogServiceTests
             CancellationToken.None);
 
         var company = await catalog.Service.GetAsync(OpenSportsTaxId, CancellationToken.None);
+        Assert.Equal(0, result.CreatedCompanyCount);
+        Assert.Equal(1, result.IgnoredExistingCompanyCount);
         Assert.Equal("Open Sports Matriz", company.DisplayName);
-        Assert.Equal("OPEN SPORTS LTDA", company.EvoName);
+        Assert.Equal("Open Sports", company.EvoName);
         Assert.Equal(20, company.BillingDay);
         Assert.True(company.HasActiveSchedule);
         Assert.Equal("cus_sandbox", company.AsaasSandboxCustomerId);
@@ -86,7 +91,7 @@ public sealed class CompanyCatalogServiceTests
 
         var company = await catalog.Service.GetAsync(OpenSportsTaxId, CancellationToken.None);
         Assert.False(company.IsActive);
-        Assert.True(company.RequiresReviewAfterReappearing);
+        Assert.False(company.RequiresReviewAfterReappearing);
     }
 
     [Fact]
@@ -105,12 +110,10 @@ public sealed class CompanyCatalogServiceTests
             OperatorId,
             CancellationToken.None);
 
-        Assert.Equal(1, result.UnseenCompanyCount);
+        Assert.Equal(0, result.CreatedCompanyCount);
+        Assert.Equal(1, result.IgnoredExistingCompanyCount);
         var webPrado = await catalog.Service.GetAsync(WebPradoTaxId, CancellationToken.None);
         Assert.True(webPrado.IsActive);
-        Assert.False(webPrado.SeenInLastImport);
-        var openSports = await catalog.Service.GetAsync(OpenSportsTaxId, CancellationToken.None);
-        Assert.True(openSports.SeenInLastImport);
     }
 
     [Fact]
@@ -118,7 +121,7 @@ public sealed class CompanyCatalogServiceTests
     {
         var catalog = CreateCatalog();
         await catalog.Service.CreateAsync(
-            new CreateCompanyRequest(WebPradoTaxId, "Web Prado", 20, null, null, OperatorId),
+            new CreateCompanyRequest(WebPradoTaxId, "Web Prado", 20, OperatorId),
             CancellationToken.None);
 
         await catalog.ImportService.SynchronizeAsync(
@@ -194,15 +197,30 @@ public sealed class CompanyCatalogServiceTests
     {
         var catalog = CreateCatalog();
         await catalog.Service.CreateAsync(
-            new CreateCompanyRequest(OpenSportsTaxId, "Open Sports", null, null, null, OperatorId),
+            new CreateCompanyRequest(OpenSportsTaxId, "Open Sports", null, OperatorId),
             CancellationToken.None);
 
         await Assert.ThrowsAsync<ValidationException>(() => catalog.Service.CreateAsync(
-            new CreateCompanyRequest("12345678000199", "Empresa Falsa", null, null, null, OperatorId),
+            new CreateCompanyRequest("12345678000199", "Empresa Falsa", null, OperatorId),
             CancellationToken.None));
         await Assert.ThrowsAsync<ConflictException>(() => catalog.Service.CreateAsync(
-            new CreateCompanyRequest(OpenSportsTaxId, "Open Sports", null, null, null, OperatorId),
+            new CreateCompanyRequest(OpenSportsTaxId, "Open Sports", null, OperatorId),
             CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task CreateAsync_UsesRegistryNameWhenTheOperatorProvidesOnlyTheTaxId()
+    {
+        var catalog = CreateCatalog();
+
+        var company = await catalog.Service.CreateAsync(
+            new CreateCompanyRequest(OpenSportsTaxId, null, 20, OperatorId),
+            CancellationToken.None);
+
+        Assert.Equal("OPEN SPORTS", company.DisplayName);
+        Assert.Equal("OPEN SPORTS LTDA", company.LegalName);
+        Assert.Equal("Found", company.RegistryLookupStatus);
+        Assert.Equal(20, company.BillingDay);
     }
 
     [Fact]
@@ -211,7 +229,7 @@ public sealed class CompanyCatalogServiceTests
         var catalog = CreateCatalog();
 
         await Assert.ThrowsAsync<ValidationException>(() => catalog.Service.CreateAsync(
-            new CreateCompanyRequest(OpenSportsTaxId, "Open Sports", 3, null, null, OperatorId),
+            new CreateCompanyRequest(OpenSportsTaxId, "Open Sports", 3, OperatorId),
             CancellationToken.None));
 
         Assert.Empty(catalog.DataStore.Companies);
@@ -223,12 +241,12 @@ public sealed class CompanyCatalogServiceTests
     {
         var catalog = CreateCatalog();
         await catalog.Service.CreateAsync(
-            new CreateCompanyRequest(OpenSportsTaxId, "Open Sports", 20, null, null, OperatorId),
+            new CreateCompanyRequest(OpenSportsTaxId, "Open Sports", 20, OperatorId),
             CancellationToken.None);
 
         await Assert.ThrowsAsync<ValidationException>(() => catalog.Service.UpdateAsync(
             OpenSportsTaxId,
-            new UpdateCompanyRequest("Nome que não deve ser salvo", 3, "cus_invalido", null, OperatorId),
+            new UpdateCompanyRequest("Nome que não deve ser salvo", 3, OperatorId),
             CancellationToken.None));
 
         var company = await catalog.Service.GetAsync(OpenSportsTaxId, CancellationToken.None);
@@ -259,7 +277,7 @@ public sealed class CompanyCatalogServiceTests
     {
         var catalog = CreateCatalog();
         await catalog.Service.CreateAsync(
-            new CreateCompanyRequest(OpenSportsTaxId, "Open Sports", 20, null, null, OperatorId),
+            new CreateCompanyRequest(OpenSportsTaxId, "Open Sports", 20, OperatorId),
             CancellationToken.None);
 
         var deactivated = await catalog.Service.DeactivateAsync(
@@ -298,8 +316,9 @@ public sealed class CompanyCatalogServiceTests
             CancellationToken.None);
         await catalog.Service.UpdateAsync(
             OpenSportsTaxId,
-            new UpdateCompanyRequest("Open Sports", 20, "cus_sandbox", null, OperatorId),
+            new UpdateCompanyRequest("Open Sports", 20, OperatorId),
             CancellationToken.None);
+        LinkAsaasCustomer(catalog, OpenSportsTaxId, AsaasEnvironment.Sandbox, "cus_sandbox");
         await catalog.Service.DeactivateAsync(
             WebPradoTaxId,
             new CompanyOperatorRequest(OperatorId),
@@ -334,26 +353,6 @@ public sealed class CompanyCatalogServiceTests
     }
 
     [Fact]
-    public async Task ListAsync_FiltersCompaniesNotSeenInTheLastSynchronization()
-    {
-        var catalog = CreateCatalog();
-        await catalog.ImportService.SynchronizeAsync(
-            CreateEvoExport(
-                ["Pessoa Um", "Plano", $"Open Sports - {OpenSportsTaxId}", ""],
-                ["Pessoa Dois", "Plano", $"Web Prado - {WebPradoTaxId}", ""]),
-            OperatorId,
-            CancellationToken.None);
-        await catalog.ImportService.SynchronizeAsync(
-            CreateEvoExport(["Pessoa Um", "Plano", $"Open Sports - {OpenSportsTaxId}", ""]),
-            OperatorId,
-            CancellationToken.None);
-
-        var unseenCompanies = await ListAsync(catalog, new ListCompaniesQuery(SeenInLastImport: false));
-
-        Assert.Equal(WebPradoTaxId, Assert.Single(unseenCompanies).TaxId);
-    }
-
-    [Fact]
     public async Task ListBillingHistoryAsync_ReturnsOnlyTheDraftsOfTheRequestedTaxId()
     {
         var catalog = CreateCatalog();
@@ -383,8 +382,10 @@ public sealed class CompanyCatalogServiceTests
             CancellationToken.None);
         await catalog.Service.UpdateAsync(
             OpenSportsTaxId,
-            new UpdateCompanyRequest("Open Sports", 20, "cus_sandbox", "cus_producao", OperatorId),
+            new UpdateCompanyRequest("Open Sports", 20, OperatorId),
             CancellationToken.None);
+        LinkAsaasCustomer(catalog, OpenSportsTaxId, AsaasEnvironment.Sandbox, "cus_sandbox");
+        LinkAsaasCustomer(catalog, OpenSportsTaxId, AsaasEnvironment.Production, "cus_producao");
         await catalog.Service.RefreshRegistryAsync(
             OpenSportsTaxId,
             new CompanyOperatorRequest(OperatorId),
@@ -422,9 +423,137 @@ public sealed class CompanyCatalogServiceTests
             CancellationToken.None);
     }
 
+    private static void LinkAsaasCustomer(
+        TestCatalog catalog,
+        string taxId,
+        AsaasEnvironment asaasEnvironment,
+        string customerId)
+    {
+        var company = catalog.DataStore.Companies[taxId];
+        company.LinkAsaasCustomer(
+            asaasEnvironment,
+            customerId,
+            OperatorId,
+            DateTimeOffset.UtcNow);
+    }
+
     private static IFormFile CreateEvoExport(params string[][] rows)
     {
-        return SpreadsheetTestBuilder.CreateFormFile("file_export_evo_manual.xlsx", EvoExportHeaders, rows);
+        var memberIdsByName = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        var contractIdsByName = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        var expandedRows = rows.Select(row =>
+        {
+            var memberName = row[0];
+            var contractName = row[1];
+            if (!memberIdsByName.TryGetValue(memberName, out var memberId))
+            {
+                memberId = 10000 + memberIdsByName.Count;
+                memberIdsByName.Add(memberName, memberId);
+            }
+
+            if (!contractIdsByName.TryGetValue(contractName, out var contractId))
+            {
+                contractId = 20000 + contractIdsByName.Count;
+                contractIdsByName.Add(contractName, contractId);
+            }
+
+            return new[]
+            {
+                memberId.ToString(),
+                memberName,
+                contractId.ToString(),
+                contractName,
+                row[2],
+                row[3],
+            };
+        }).ToArray();
+        return SpreadsheetTestBuilder.CreateFormFile(
+            "file_export_evo_manual.xlsx",
+            EvoExportHeaders,
+            expandedRows);
+    }
+
+    [Fact]
+    public async Task SynchronizeAsync_UpdatesPersistentCorporateMemberSnapshot()
+    {
+        var catalog = CreateCatalog();
+        await catalog.ImportService.SynchronizeAsync(
+            CreateEvoExportWithIds(
+                ["30001", "Pessoa Um", "40001", "Plano A", $"Open Sports - {OpenSportsTaxId}", ""],
+                ["30002", "Pessoa Dois", "40002", "Plano B", $"Open Sports - {OpenSportsTaxId}", ""]),
+            OperatorId,
+            CancellationToken.None);
+
+        var secondImport = await catalog.ImportService.SynchronizeAsync(
+            CreateEvoExportWithIds(
+                ["30001", "Pessoa Um Atualizada", "40003", "Plano C", $"Open Sports - {OpenSportsTaxId}", ""]),
+            OperatorId,
+            CancellationToken.None);
+
+        Assert.Equal(1, secondImport.MemberComparison.RetainedMemberCount);
+        Assert.Equal(1, secondImport.MemberComparison.DepartedMemberCount);
+        var members = await catalog.Service.ListMembersAsync(OpenSportsTaxId, CancellationToken.None);
+        Assert.Equal(2, members.Count);
+        Assert.Contains(members, member =>
+            member.EvoMemberId == 30001
+            && member.IsActive
+            && member.MemberName == "Pessoa Um Atualizada"
+            && member.Contracts.SequenceEqual(["Plano C"]));
+        Assert.Contains(members, member => member.EvoMemberId == 30002 && !member.IsActive);
+    }
+
+    [Fact]
+    public async Task SynchronizeAsync_BlocksCompanyConflictForTheSameEvoMemberId()
+    {
+        var catalog = CreateCatalog();
+        await catalog.ImportService.SynchronizeAsync(
+            CreateEvoExportWithIds(
+                ["30001", "Pessoa Um", "40001", "Plano", $"Open Sports - {OpenSportsTaxId}", ""]),
+            OperatorId,
+            CancellationToken.None);
+
+        var conflictingFile = CreateEvoExportWithIds(
+            ["30001", "Pessoa Um", "40001", "Plano", $"Web Prado - {WebPradoTaxId}", ""]);
+        var preview = await catalog.ImportService.PreviewAsync(
+            conflictingFile,
+            CancellationToken.None);
+        Assert.Equal(1, preview.MemberComparison.ConflictMemberCount);
+
+        conflictingFile = CreateEvoExportWithIds(
+            ["30001", "Pessoa Um", "40001", "Plano", $"Web Prado - {WebPradoTaxId}", ""]);
+        await Assert.ThrowsAsync<ConflictException>(() => catalog.ImportService.SynchronizeAsync(
+            conflictingFile,
+            OperatorId,
+            completeSnapshotConfirmed: true,
+            CancellationToken.None));
+        Assert.DoesNotContain(
+            await catalog.Service.ListAsync(new ListCompaniesQuery(), CancellationToken.None),
+            company => company.TaxId == WebPradoTaxId);
+    }
+
+    [Fact]
+    public async Task SynchronizeAsync_RequiresCompleteSnapshotConfirmationBeforeChangingData()
+    {
+        var catalog = CreateCatalog();
+
+        await Assert.ThrowsAsync<ValidationException>(() => catalog.ImportService.SynchronizeAsync(
+            CreateEvoExportWithIds(
+                ["30001", "Pessoa Um", "40001", "Plano", $"Open Sports - {OpenSportsTaxId}", ""]),
+            OperatorId,
+            completeSnapshotConfirmed: false,
+            CancellationToken.None));
+
+        Assert.Empty(await catalog.Service.ListAsync(
+            new ListCompaniesQuery(),
+            CancellationToken.None));
+    }
+
+    private static IFormFile CreateEvoExportWithIds(params string[][] rows)
+    {
+        return SpreadsheetTestBuilder.CreateFormFile(
+            "file_export_evo_manual.xlsx",
+            EvoExportHeaders,
+            rows);
     }
 
     private static TestCatalog CreateCatalog(ICompanyRegistryGateway? companyRegistryGateway = null)
@@ -432,6 +561,7 @@ public sealed class CompanyCatalogServiceTests
         var dataStore = new InMemoryBillingDataStore();
         var companyRepository = new InMemoryCompanyRepository(dataStore);
         var companyCatalogImportRepository = new InMemoryCompanyCatalogImportRepository(dataStore);
+        var corporateMemberRepository = new InMemoryCorporateMemberRepository(dataStore);
         var companyBillingScheduleRepository = new InMemoryCompanyBillingScheduleRepository(dataStore);
         var billingDraftRepository = new InMemoryBillingDraftRepository(dataStore);
         var auditLogRepository = new InMemoryAuditLogRepository(dataStore);
@@ -440,11 +570,16 @@ public sealed class CompanyCatalogServiceTests
             companyRepository,
             Options.Create(new CompanyRegistryOptions()),
             NullLogger<CompanyRegistryEnrichmentService>.Instance);
+        var corporateMemberService = new CorporateMemberService(
+            corporateMemberRepository,
+            companyRepository);
 
         return new TestCatalog(
             new CompanyCatalogService(
                 companyRepository,
                 companyCatalogImportRepository,
+                corporateMemberRepository,
+                corporateMemberService,
                 companyBillingScheduleRepository,
                 billingDraftRepository,
                 enrichmentService,
@@ -453,6 +588,7 @@ public sealed class CompanyCatalogServiceTests
                 new CompanyCatalogSpreadsheetReader(new SpreadsheetWorkbookReader()),
                 companyRepository,
                 companyCatalogImportRepository,
+                corporateMemberService,
                 enrichmentService),
             dataStore);
     }

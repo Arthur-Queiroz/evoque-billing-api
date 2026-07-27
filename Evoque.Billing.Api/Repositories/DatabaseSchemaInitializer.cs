@@ -10,6 +10,7 @@ public sealed class DatabaseSchemaInitializer(MySqlConnectionFactory connectionF
     private const string ChargeBatchApprovalMigrationId = "004_add_charge_batch_approval";
     private const string CompanyBillingScheduleMigrationId = "005_add_company_billing_schedules";
     private const string CompanyCatalogMigrationId = "006_add_company_catalog";
+    private const string CorporateMemberMigrationId = "007_add_corporate_member_crm";
 
     public async Task InitializeAsync(CancellationToken cancellationToken)
     {
@@ -186,6 +187,54 @@ public sealed class DatabaseSchemaInitializer(MySqlConnectionFactory connectionF
     {
         await CreateCompanyBillingScheduleTableAsync(connection, cancellationToken);
         await CreateCompanyCatalogTablesAsync(connection, cancellationToken);
+        await CreateCorporateMemberTablesAsync(connection, cancellationToken);
+    }
+
+    private static async Task CreateCorporateMemberTablesAsync(
+        MySqlConnection connection,
+        CancellationToken cancellationToken)
+    {
+        if (await IsAppliedAsync(connection, CorporateMemberMigrationId, cancellationToken))
+        {
+            return;
+        }
+
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        await ExecuteAsync(connection, """
+            CREATE TABLE corporate_members (
+                evo_member_id BIGINT NOT NULL PRIMARY KEY,
+                member_name VARCHAR(255) NOT NULL,
+                company_tax_id CHAR(14) NOT NULL,
+                is_active BOOLEAN NOT NULL,
+                first_seen_at DATETIME(6) NOT NULL,
+                last_seen_at DATETIME(6) NOT NULL,
+                deactivated_at DATETIME(6) NULL,
+                last_import_id CHAR(36) NOT NULL,
+                updated_by VARCHAR(255) NOT NULL,
+                updated_at DATETIME(6) NOT NULL,
+                CONSTRAINT fk_corporate_members_company
+                    FOREIGN KEY (company_tax_id) REFERENCES companies (tax_id),
+                INDEX ix_corporate_members_company_active
+                    (company_tax_id, is_active, member_name),
+                INDEX ix_corporate_members_last_import (last_import_id)
+            );
+            """, transaction, cancellationToken);
+
+        await ExecuteAsync(connection, """
+            CREATE TABLE corporate_member_contracts (
+                evo_member_id BIGINT NOT NULL,
+                contract_key VARCHAR(128) NOT NULL,
+                evo_contract_id VARCHAR(64) NULL,
+                contract_name VARCHAR(255) NULL,
+                PRIMARY KEY (evo_member_id, contract_key),
+                CONSTRAINT fk_corporate_member_contracts_member
+                    FOREIGN KEY (evo_member_id) REFERENCES corporate_members (evo_member_id)
+                    ON DELETE CASCADE
+            );
+            """, transaction, cancellationToken);
+
+        await InsertMigrationAsync(connection, transaction, CorporateMemberMigrationId, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
     }
 
     private static async Task CreateCompanyCatalogTablesAsync(

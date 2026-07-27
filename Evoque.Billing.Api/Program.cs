@@ -48,6 +48,7 @@ if (string.IsNullOrWhiteSpace(billingDatabaseConnectionString))
     builder.Services.AddScoped<ICompanyBillingScheduleRepository, InMemoryCompanyBillingScheduleRepository>();
     builder.Services.AddScoped<ICompanyRepository, InMemoryCompanyRepository>();
     builder.Services.AddScoped<ICompanyCatalogImportRepository, InMemoryCompanyCatalogImportRepository>();
+    builder.Services.AddScoped<ICorporateMemberRepository, InMemoryCorporateMemberRepository>();
 }
 else
 {
@@ -60,6 +61,7 @@ else
     builder.Services.AddScoped<ICompanyBillingScheduleRepository, MySqlCompanyBillingScheduleRepository>();
     builder.Services.AddScoped<ICompanyRepository, MySqlCompanyRepository>();
     builder.Services.AddScoped<ICompanyCatalogImportRepository, MySqlCompanyCatalogImportRepository>();
+    builder.Services.AddScoped<ICorporateMemberRepository, MySqlCorporateMemberRepository>();
 }
 
 builder.Services.AddScoped<IAsaasChargeGateway, AsaasChargeGateway>();
@@ -79,8 +81,10 @@ builder.Services.AddScoped<CorporateBillingPreviewService>();
 builder.Services.AddScoped<ICompanyRegistryGateway, BrasilApiCompanyRegistryGateway>();
 builder.Services.AddScoped<CompanyRegistryEnrichmentService>();
 builder.Services.AddScoped<CompanyCatalogService>();
+builder.Services.AddScoped<CompanyAsaasSynchronizationService>();
 builder.Services.AddScoped<CompanyCatalogSpreadsheetReader>();
 builder.Services.AddScoped<CompanyCatalogImportService>();
+builder.Services.AddScoped<CorporateMemberService>();
 builder.Services.AddScoped<SpreadsheetWorkbookReader>();
 builder.Services.AddScoped<BillingSpreadsheetReader>();
 builder.Services.AddScoped<BillingSpreadsheetImportService>();

@@ -8,7 +8,8 @@ namespace Evoque.Billing.Api.Services;
 
 public sealed class IntegrationStatusService(
     IOptions<AsaasOptions> asaasOptions,
-    IOptions<EvoOptions> evoOptions)
+    IOptions<EvoOptions> evoOptions,
+    IHostEnvironment hostEnvironment)
 {
     public IntegrationStatusResponse GetStatus()
     {
@@ -24,10 +25,13 @@ public sealed class IntegrationStatusService(
             new AsaasEnvironmentStatusResponse(
                 AsaasEnvironment.Sandbox.ToString(),
                 configuredAsaasOptions.IsConfigured(AsaasEnvironment.Sandbox),
+                configuredAsaasOptions.IsConfigured(AsaasEnvironment.Sandbox),
                 configuredAsaasOptions.CanCreateCharges(AsaasEnvironment.Sandbox)),
             new AsaasEnvironmentStatusResponse(
                 AsaasEnvironment.Production.ToString(),
                 configuredAsaasOptions.IsConfigured(AsaasEnvironment.Production),
+                hostEnvironment.IsProduction()
+                    && configuredAsaasOptions.IsConfigured(AsaasEnvironment.Production),
                 configuredAsaasOptions.CanCreateCharges(AsaasEnvironment.Production)),
             evoIsConfigured,
             evoIsConfigured

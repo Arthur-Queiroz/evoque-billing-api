@@ -6,17 +6,19 @@ using Evoque.Billing.Api.Repositories;
 namespace Evoque.Billing.Api.Services;
 
 /// <summary>
-/// Sincroniza o catálogo interno a partir da exportação completa do CRM 2.0 do
-/// EVO.
+/// Adiciona ao catálogo empresas ainda inexistentes encontradas na exportação
+/// completa do CRM 2.0 do EVO.
 ///
-/// O fluxo é: upload → preview → confirmação do operador → upsert por CNPJ →
+/// O fluxo é: upload → preview → confirmação do operador → insert por CNPJ →
 /// enriquecimento cadastral tolerante a falhas. Nenhuma etapa cria prévia
-/// financeira nem chama o Asaas.
+/// financeira nem chama o Asaas. Empresas já cadastradas são ignoradas sem
+/// qualquer atualização.
 /// </summary>
 public sealed class CompanyCatalogImportService(
     CompanyCatalogSpreadsheetReader companyCatalogSpreadsheetReader,
     ICompanyRepository companyRepository,
     ICompanyCatalogImportRepository companyCatalogImportRepository,
+    CorporateMemberService corporateMemberService,
     CompanyRegistryEnrichmentService companyRegistryEnrichmentService)
 {
     private const long MaximumSpreadsheetSize = 25 * 1024 * 1024;
@@ -27,17 +29,31 @@ public sealed class CompanyCatalogImportService(
     {
         var spreadsheetContent = await ReadSpreadsheetContentAsync(spreadsheetFile, cancellationToken);
         var importedCatalog = ReadCatalog(spreadsheetContent, spreadsheetFile.FileName);
-        return CreatePreviewResponse(importedCatalog);
+        var existingCompanies = await companyRepository.ListAsync(cancellationToken);
+        var existingTaxIds = existingCompanies
+            .Select(company => company.TaxId)
+            .ToHashSet(StringComparer.Ordinal);
+        var memberComparison = await corporateMemberService.CompareAsync(
+            importedCatalog,
+            cancellationToken);
+        return CreatePreviewResponse(importedCatalog, existingTaxIds, memberComparison);
     }
 
     public async Task<CompanyCatalogImportResponse> SynchronizeAsync(
         IFormFile spreadsheetFile,
         string operatorId,
+        bool completeSnapshotConfirmed,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(operatorId))
         {
             throw new ValidationException("O responsável pela sincronização do catálogo é obrigatório.");
+        }
+
+        if (!completeSnapshotConfirmed)
+        {
+            throw new ValidationException(
+                "Confirme que o arquivo contém a exportação completa de clientes ativos do CRM 2.0.");
         }
 
         var spreadsheetContent = await ReadSpreadsheetContentAsync(spreadsheetFile, cancellationToken);
@@ -46,39 +62,26 @@ public sealed class CompanyCatalogImportService(
         var importId = Guid.NewGuid();
         var synchronizedAt = DateTimeOffset.UtcNow;
         var existingCompanies = await companyRepository.ListAsync(cancellationToken);
-        var existingCompaniesByTaxId = existingCompanies.ToDictionary(
-            company => company.TaxId,
-            StringComparer.Ordinal);
+        var existingTaxIds = existingCompanies
+            .Select(company => company.TaxId)
+            .ToHashSet(StringComparer.Ordinal);
+        var previewMemberComparison = await corporateMemberService.CompareAsync(
+            importedCatalog,
+            cancellationToken);
+        if (previewMemberComparison.ConflictMemberCount > 0)
+        {
+            throw new ConflictException(
+                $"A planilha possui {previewMemberComparison.ConflictMemberCount} colaborador(es) "
+                + "com divergência de empresa. Nenhum vínculo foi alterado.");
+        }
 
         var createdCompanies = new List<Company>();
-        var synchronizedCompanies = new List<Company>();
-        var updatedCompanyCount = 0;
-        var preservedManualNameCount = 0;
+        var ignoredExistingCompanyCount = 0;
         foreach (var discoveredCompany in importedCatalog.Companies)
         {
-            if (existingCompaniesByTaxId.TryGetValue(discoveredCompany.TaxId, out var existingCompany))
+            if (existingTaxIds.Contains(discoveredCompany.TaxId))
             {
-                // Um nome operacional diferente do observado no EVO só existe
-                // porque alguém o editou; contar antes deixa isso visível no
-                // resultado da sincronização.
-                if (!string.Equals(
-                    existingCompany.DisplayName,
-                    discoveredCompany.EvoName,
-                    StringComparison.Ordinal))
-                {
-                    preservedManualNameCount++;
-                }
-
-                // Nome operacional, status, agenda e vínculos Asaas continuam
-                // como estavam: a planilha só atualiza o que ela realmente observou.
-                existingCompany.ApplyEvoSpreadsheetSynchronization(
-                    discoveredCompany.EvoName,
-                    discoveredCompany.Members.Count,
-                    importId,
-                    operatorId,
-                    synchronizedAt);
-                synchronizedCompanies.Add(existingCompany);
-                updatedCompanyCount++;
+                ignoredExistingCompanyCount++;
                 continue;
             }
 
@@ -89,13 +92,8 @@ public sealed class CompanyCatalogImportService(
                 importId,
                 operatorId,
                 synchronizedAt);
-            synchronizedCompanies.Add(newCompany);
             createdCompanies.Add(newCompany);
         }
-
-        // Empresas ausentes nesta planilha não são inativadas nem excluídas;
-        // apenas deixam de constar como vistas na última sincronização.
-        var unseenCompanyCount = existingCompanies.Count(company => !company.WasSeenInImport(importId));
 
         var importedMembers = importedCatalog.Companies
             .SelectMany(company => company.Members.Select(member => new CompanyCatalogImportMember(
@@ -103,7 +101,7 @@ public sealed class CompanyCatalogImportService(
                 company.TaxId,
                 member.SourceRowNumber,
                 member.MemberName,
-                member.ContractName)))
+                member.Contracts.FirstOrDefault()?.ContractName)))
             .ToArray();
 
         var companyCatalogImport = CompanyCatalogImport.Create(
@@ -115,23 +113,31 @@ public sealed class CompanyCatalogImportService(
             importedCatalog.AnalyzedRowCount,
             importedCatalog.Companies.Count,
             createdCompanies.Count,
-            updatedCompanyCount,
-            unseenCompanyCount,
+            updatedCompanyCount: 0,
+            unseenCompanyCount: 0,
             importedCatalog.Warnings.Count);
         var auditLog = AuditLog.Create(
-            "company-catalog.synchronized",
+            "company-catalog.bulk-added",
             operatorId,
             synchronizedAt,
             null,
             null,
-            $"Sincronização {importId} do catálogo: {importedCatalog.Companies.Count} empresas "
-            + $"encontradas, {createdCompanies.Count} criadas, {updatedCompanyCount} atualizadas, "
-            + $"{unseenCompanyCount} não vistas, {importedCatalog.Warnings.Count} avisos.");
+            $"Inclusão em lote {importId}: {importedCatalog.Companies.Count} empresas encontradas, "
+            + $"{createdCompanies.Count} criadas, {ignoredExistingCompanyCount} já cadastradas e ignoradas, "
+            + $"{importedCatalog.Warnings.Count} avisos.");
         await companyCatalogImportRepository.AddAsync(
             companyCatalogImport,
             importedMembers,
-            synchronizedCompanies,
+            createdCompanies,
             auditLog,
+            cancellationToken);
+
+        var memberComparison = await corporateMemberService.ApplyCompleteSnapshotAsync(
+            importedCatalog,
+            importId,
+            operatorId,
+            synchronizedAt,
+            completeSnapshotConfirmed,
             cancellationToken);
 
         // Só as empresas novas são consultadas automaticamente. As já existentes
@@ -145,12 +151,23 @@ public sealed class CompanyCatalogImportService(
             synchronizedAt,
             companyCatalogImport.OperatorId,
             createdCompanies.Count,
-            updatedCompanyCount,
-            preservedManualNameCount,
-            unseenCompanyCount,
+            ignoredExistingCompanyCount,
             enrichmentSummary.EnrichedCount,
             enrichmentSummary.UnavailableCount,
-            CreatePreviewResponse(importedCatalog));
+            memberComparison,
+            CreatePreviewResponse(importedCatalog, existingTaxIds, memberComparison));
+    }
+
+    public Task<CompanyCatalogImportResponse> SynchronizeAsync(
+        IFormFile spreadsheetFile,
+        string operatorId,
+        CancellationToken cancellationToken)
+    {
+        return SynchronizeAsync(
+            spreadsheetFile,
+            operatorId,
+            completeSnapshotConfirmed: true,
+            cancellationToken);
     }
 
     private ImportedCompanyCatalog ReadCatalog(byte[] spreadsheetContent, string fileName)
@@ -184,18 +201,26 @@ public sealed class CompanyCatalogImportService(
     }
 
     private static CompanyCatalogImportPreviewResponse CreatePreviewResponse(
-        ImportedCompanyCatalog importedCatalog)
+        ImportedCompanyCatalog importedCatalog,
+        IReadOnlySet<string> existingTaxIds,
+        CorporateMemberComparisonResponse memberComparison)
     {
         var companies = importedCatalog.Companies
             .Select(company => new CompanyCatalogImportCompanyResponse(
                 company.TaxId,
                 CompanyTaxId.Format(company.TaxId),
                 company.EvoName,
+                existingTaxIds.Contains(company.TaxId),
                 company.Members.Count,
                 company.Members
-                    .Select(member => new CompanyMemberResponse(
+                    .Select(member => new CompanyCatalogImportedMemberResponse(
+                        member.EvoMemberId,
                         member.MemberName,
-                        member.ContractName,
+                        member.Contracts
+                            .Select(contract => contract.ContractName)
+                            .Where(contractName => !string.IsNullOrWhiteSpace(contractName))
+                            .Cast<string>()
+                            .ToArray(),
                         member.SourceRowNumber))
                     .ToArray()))
             .ToArray();
@@ -204,10 +229,13 @@ public sealed class CompanyCatalogImportService(
             importedCatalog.FileName,
             importedCatalog.AnalyzedRowCount,
             companies.Length,
+            companies.Count(company => !company.IsAlreadyRegistered),
+            companies.Count(company => company.IsAlreadyRegistered),
             companies.Sum(company => company.MemberCount),
             importedCatalog.DuplicateMemberCount,
             importedCatalog.Warnings.Count(warning => warning.Code == "InvalidTaxId"),
             importedCatalog.Warnings.Count(warning => warning.Code == "CompanyNameConflict"),
+            memberComparison,
             companies,
             importedCatalog.Warnings
                 .Select(CompanyCatalogImportWarningResponse.FromDomain)

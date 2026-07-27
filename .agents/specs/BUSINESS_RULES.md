@@ -27,24 +27,46 @@ de Produção bem-sucedida consolida a cobrança definitiva.
 
 - A empresa é identificada pelo CNPJ normalizado, validado pelos dois dígitos
   verificadores. Uma sequência qualquer de 14 dígitos não é aceita.
-- A sincronização da planilha do CRM 2.0 descobre a empresa mesmo quando o
+- A inclusão em lote pela planilha do CRM 2.0 descobre a empresa mesmo quando o
   valor do contrato está vazio, zero ou inválido. Exigir valor positivo é regra
   da prévia de faturamento, não do catálogo.
 - Um mesmo CNPJ com nomes diferentes não cria duas empresas: vence o nome mais
   frequente, de forma determinística, e um aviso de conflito é registrado.
-- A sincronização atualiza o nome observado no EVO, a contagem de pessoas e as
-  datas de aparição. Ela nunca sobrescreve o nome operacional editado, a
-  agenda, a situação manual ou os identificadores de cliente Asaas.
-- Uma empresa ausente da planilha não é inativada nem excluída. Ela apenas
-  deixa de constar como vista na última sincronização.
-- Uma empresa inativa que reaparece continua inativa e é marcada para revisão.
-- Uma empresa cadastrada manualmente e ausente da planilha continua existindo.
+- A planilha cadastra somente CNPJs inexistentes. Uma empresa já cadastrada é
+  ignorada no catálogo: nome, agenda, situação e vínculos Asaas não são
+  atualizados. Os colaboradores presentes na mesma planilha são comparados com
+  a base persistente.
+- Uma empresa ausente da planilha não sofre nenhuma alteração.
+- O cadastro manual exige o CNPJ. Nome operacional e dia são opcionais; quando
+  o nome não é informado, o backend usa nome fantasia ou razão social da
+  BrasilAPI. Indisponibilidade externa não impede o cadastro provisório.
 - Não existe exclusão física. Inativar e reativar são operações explícitas que
   preservam prévias, lotes, auditoria e histórico.
-- Nenhuma operação do catálogo cria cliente ou cobrança no Asaas. Configurar um
-  identificador de cliente apenas registra um vínculo existente.
+- Identificadores de cliente Asaas não são preenchidos manualmente. O backend
+  resolve o vínculo pelo CNPJ e o persiste com auditoria.
+- No Sandbox, a resolução reutiliza o cliente de teste existente ou cria um
+  espelho com e-mail controlado quando ele ainda não existe.
+- Em Produção, a resolução é somente leitura: localiza exatamente um cliente e
+  registra o vínculo interno. Ausência ou duplicidade viram pendência; o
+  software não cria nem altera cliente real nessa etapa.
 - A consulta ao cadastro público é enriquecimento: falha, timeout, `404` ou
-  `429` não desfazem a sincronização e não apagam dados já obtidos.
+  `429` não desfazem o cadastro e não apagam dados já obtidos.
+
+## Colaboradores corporativos
+
+- A identidade do colaborador é o `IdCliente` exportado pelo EVO. Nome não é
+  chave e CPF não é armazenado para esse fim.
+- Várias linhas ou contratos do mesmo `IdCliente` representam uma única pessoa
+  com uma coleção de contratos, sem repetição visual.
+- A aplicação de uma importação exige a confirmação explícita de que o arquivo
+  é a exportação completa de clientes ativos do CRM 2.0.
+- Um colaborador ativo ausente da exportação completa é inativado, nunca
+  excluído. Se reaparecer na mesma empresa, é reativado.
+- Mudança automática de empresa não faz parte do fluxo. Se o mesmo `IdCliente`
+  aparecer sob outro CNPJ, a importação é bloqueada como conflito e nenhum
+  vínculo é alterado.
+- A prévia deve informar novos, mantidos, inativados, reativados e conflitos
+  antes da confirmação.
 
 ## Empresas e ciclos
 

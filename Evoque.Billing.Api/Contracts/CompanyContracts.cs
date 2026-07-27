@@ -14,21 +14,29 @@ public sealed record ListCompaniesQuery(
 
 public sealed record CreateCompanyRequest(
     string TaxId,
-    string DisplayName,
+    string? DisplayName,
     int? BillingDay,
-    string? AsaasSandboxCustomerId,
-    string? AsaasProductionCustomerId,
     string OperatorId);
 
 public sealed record UpdateCompanyRequest(
     string DisplayName,
     int? BillingDay,
-    string? AsaasSandboxCustomerId,
-    string? AsaasProductionCustomerId,
     string OperatorId);
 
 /// <summary>Corpo das ações que só precisam saber quem é o responsável.</summary>
 public sealed record CompanyOperatorRequest(string OperatorId);
+
+public sealed record SynchronizeCompanyAsaasSandboxRequest(
+    string Email,
+    string OperatorId);
+
+public sealed record CompanyAsaasSynchronizationResponse(
+    string Environment,
+    string Status,
+    string? CustomerId,
+    string? CustomerName,
+    bool CreatedNow,
+    string Message);
 
 public sealed record CompanyRegistryAddressResponse(
     string Street,
@@ -86,7 +94,8 @@ public sealed record CompanyResponse(
     public static CompanyResponse FromDomain(
         Company company,
         CompanyBillingSchedule? companyBillingSchedule,
-        Guid? latestImportId)
+        Guid? latestImportId,
+        int? corporateMemberCount = null)
     {
         return new CompanyResponse(
             company.TaxId,
@@ -101,7 +110,7 @@ public sealed record CompanyResponse(
             company.RegistryLastCheckedAt,
             company.IsActive,
             company.Source.ToString(),
-            company.LastImportedMemberCount,
+            corporateMemberCount ?? company.LastImportedMemberCount,
             company.FirstSeenAt,
             company.LastSeenAt,
             company.WasSeenInImport(latestImportId),
@@ -112,21 +121,6 @@ public sealed record CompanyResponse(
             company.AsaasProductionCustomerId,
             company.UpdatedAt,
             company.UpdatedBy);
-    }
-}
-
-/// <summary>Pessoa vista para a empresa na sincronização mais recente.</summary>
-public sealed record CompanyMemberResponse(
-    string MemberName,
-    string? ContractName,
-    int SourceRowNumber)
-{
-    public static CompanyMemberResponse FromDomain(CompanyCatalogImportMember importedMember)
-    {
-        return new CompanyMemberResponse(
-            importedMember.MemberName,
-            importedMember.ContractName,
-            importedMember.SourceRowNumber);
     }
 }
 

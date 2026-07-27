@@ -11,7 +11,9 @@ namespace Evoque.Billing.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/companies")]
-public sealed class CompaniesController(CompanyCatalogService companyCatalogService) : ControllerBase
+public sealed class CompaniesController(
+    CompanyCatalogService companyCatalogService,
+    CompanyAsaasSynchronizationService companyAsaasSynchronizationService) : ControllerBase
 {
     [HttpGet]
     [ProducesResponseType<IReadOnlyCollection<CompanyResponse>>(StatusCodes.Status200OK)]
@@ -87,9 +89,44 @@ public sealed class CompaniesController(CompanyCatalogService companyCatalogServ
         return Ok(company);
     }
 
+    [HttpPost("{taxId}/asaas/sandbox-sync")]
+    [ProducesResponseType<CompanyAsaasSynchronizationResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<CompanyAsaasSynchronizationResponse>(StatusCodes.Status201Created)]
+    public async Task<ActionResult<CompanyAsaasSynchronizationResponse>> SynchronizeAsaasSandboxAsync(
+        string taxId,
+        SynchronizeCompanyAsaasSandboxRequest request,
+        CancellationToken cancellationToken)
+    {
+        var synchronization = await companyAsaasSynchronizationService.SynchronizeSandboxAsync(
+            taxId,
+            request,
+            cancellationToken);
+        return synchronization.CreatedNow
+            ? StatusCode(StatusCodes.Status201Created, synchronization)
+            : Ok(synchronization);
+    }
+
+    /// <summary>
+    /// Consulta o Asaas Produção pelo CNPJ e registra localmente o vínculo
+    /// encontrado. Este endpoint nunca cria nem altera um cliente no Asaas.
+    /// </summary>
+    [HttpPost("{taxId}/asaas/production-sync")]
+    [ProducesResponseType<CompanyAsaasSynchronizationResponse>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<CompanyAsaasSynchronizationResponse>> SynchronizeAsaasProductionAsync(
+        string taxId,
+        CompanyOperatorRequest request,
+        CancellationToken cancellationToken)
+    {
+        var synchronization = await companyAsaasSynchronizationService.SynchronizeProductionAsync(
+            taxId,
+            request,
+            cancellationToken);
+        return Ok(synchronization);
+    }
+
     [HttpGet("{taxId}/members")]
-    [ProducesResponseType<IReadOnlyCollection<CompanyMemberResponse>>(StatusCodes.Status200OK)]
-    public async Task<ActionResult<IReadOnlyCollection<CompanyMemberResponse>>> ListMembersAsync(
+    [ProducesResponseType<IReadOnlyCollection<CorporateMemberResponse>>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyCollection<CorporateMemberResponse>>> ListMembersAsync(
         string taxId,
         CancellationToken cancellationToken)
     {

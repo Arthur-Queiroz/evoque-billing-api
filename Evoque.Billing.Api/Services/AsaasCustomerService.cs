@@ -68,13 +68,20 @@ public sealed class AsaasCustomerService(
             throw new ValidationException("O e-mail do cliente Sandbox é inválido.");
         }
 
-        var existingCustomer = await asaasCustomerGateway.FindSandboxByTaxIdAsync(
+        var lookupResult = await asaasCustomerGateway.FindByTaxIdAsync(
+            AsaasEnvironment.Sandbox,
             taxId,
             cancellationToken);
-        if (existingCustomer is not null)
+        if (lookupResult.Status == AsaasCustomerLookupStatus.Ambiguous)
+        {
+            throw new ConflictException(
+                $"Foram encontrados {lookupResult.MatchCount} clientes Sandbox para o mesmo CNPJ.");
+        }
+
+        if (lookupResult.Customer is not null)
         {
             return new CreateSandboxAsaasCustomerResponse(
-                await CreateResponseAsync(existingCustomer, cancellationToken),
+                await CreateResponseAsync(lookupResult.Customer, cancellationToken),
                 false);
         }
 

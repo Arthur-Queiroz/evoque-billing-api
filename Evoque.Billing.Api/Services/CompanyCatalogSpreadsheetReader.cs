@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using System.Globalization;
 using Evoque.Billing.Api.Domain;
 
 namespace Evoque.Billing.Api.Services;
@@ -71,10 +72,28 @@ public sealed partial class CompanyCatalogSpreadsheetReader(SpreadsheetWorkbookR
                 continue;
             }
 
+            var evoMemberIdValue = row.ReadColumn(columns.MemberIdColumn);
+            if (!long.TryParse(
+                    evoMemberIdValue,
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out var evoMemberId)
+                || evoMemberId <= 0)
+            {
+                warnings.Add(new CompanyCatalogWarning(
+                    row.RowNumber,
+                    "InvalidMemberId",
+                    "A linha possui empresa, mas não possui um IdCliente válido."));
+                continue;
+            }
+
             var contractName = row.ReadColumn(columns.ContractColumn);
+            var evoContractId = row.ReadColumn(columns.ContractIdColumn);
             var memberWasAdded = companyBuilder.TryAddMember(
                 row.RowNumber,
+                evoMemberId,
                 memberName.Trim(),
+                string.IsNullOrWhiteSpace(evoContractId) ? null : evoContractId.Trim(),
                 string.IsNullOrWhiteSpace(contractName) ? null : contractName.Trim());
             if (!memberWasAdded)
             {
@@ -86,6 +105,12 @@ public sealed partial class CompanyCatalogSpreadsheetReader(SpreadsheetWorkbookR
         {
             throw new ValidationException(
                 "Não foi encontrada a coluna Empresa ou Profissão na planilha exportada do EVO.");
+        }
+
+        if (columns.MemberNameColumn is null || columns.MemberIdColumn is null)
+        {
+            throw new ValidationException(
+                "A planilha deve conter as colunas Nome e IdCliente para atualizar os colaboradores.");
         }
 
         var companies = discoveredCompanies.Values
@@ -167,27 +192,30 @@ public sealed partial class CompanyCatalogSpreadsheetReader(SpreadsheetWorkbookR
     private sealed class DiscoveredCompanyBuilder(string taxId)
     {
         private readonly Dictionary<string, int> observationCountByName = new(StringComparer.Ordinal);
-        private readonly HashSet<string> seenMemberKeys = new(StringComparer.Ordinal);
-        private readonly List<ImportedCatalogMember> members = [];
+        private readonly Dictionary<long, ImportedCatalogMemberBuilder> membersById = [];
 
         public void RegisterObservedName(string evoName)
         {
             observationCountByName[evoName] = observationCountByName.GetValueOrDefault(evoName) + 1;
         }
 
-        public bool TryAddMember(int sourceRowNumber, string memberName, string? contractName)
+        public bool TryAddMember(
+            int sourceRowNumber,
+            long evoMemberId,
+            string memberName,
+            string? evoContractId,
+            string? contractName)
         {
-            var memberKey = string.Join(
-                "|",
-                SpreadsheetText.Normalize(memberName),
-                SpreadsheetText.Normalize(contractName ?? string.Empty));
-            if (!seenMemberKeys.Add(memberKey))
+            if (!membersById.TryGetValue(evoMemberId, out var memberBuilder))
             {
-                return false;
+                memberBuilder = new ImportedCatalogMemberBuilder(
+                    sourceRowNumber,
+                    evoMemberId,
+                    memberName);
+                membersById.Add(evoMemberId, memberBuilder);
             }
 
-            members.Add(new ImportedCatalogMember(sourceRowNumber, memberName, contractName));
-            return true;
+            return memberBuilder.TryAddContract(evoContractId, contractName);
         }
 
         public ImportedCatalogCompany Build(List<CompanyCatalogWarning> warnings)
@@ -209,7 +237,8 @@ public sealed partial class CompanyCatalogSpreadsheetReader(SpreadsheetWorkbookR
             return new ImportedCatalogCompany(
                 taxId,
                 chosenName,
-                members
+                membersById.Values
+                    .Select(member => member.Build())
                     .OrderBy(member => member.MemberName, StringComparer.OrdinalIgnoreCase)
                     .ThenBy(member => member.SourceRowNumber)
                     .ToArray());
@@ -227,6 +256,46 @@ public sealed partial class CompanyCatalogSpreadsheetReader(SpreadsheetWorkbookR
                 .First()
                 .Key;
         }
+
+        private sealed class ImportedCatalogMemberBuilder(
+            int sourceRowNumber,
+            long evoMemberId,
+            string memberName)
+        {
+            private readonly Dictionary<string, ImportedCatalogContract> contractsByKey =
+                new(StringComparer.Ordinal);
+
+            public bool TryAddContract(string? evoContractId, string? contractName)
+            {
+                var contractKey = CreateContractKey(evoContractId, contractName);
+                return contractsByKey.TryAdd(
+                    contractKey,
+                    new ImportedCatalogContract(contractKey, evoContractId, contractName));
+            }
+
+            public ImportedCatalogMember Build()
+            {
+                return new ImportedCatalogMember(
+                    sourceRowNumber,
+                    evoMemberId,
+                    memberName,
+                    contractsByKey.Values
+                        .OrderBy(contract => contract.ContractName, StringComparer.OrdinalIgnoreCase)
+                        .ThenBy(contract => contract.ContractKey, StringComparer.Ordinal)
+                        .ToArray());
+            }
+
+            private static string CreateContractKey(string? evoContractId, string? contractName)
+            {
+                if (!string.IsNullOrWhiteSpace(evoContractId))
+                {
+                    return $"id:{evoContractId.Trim()}";
+                }
+
+                var normalizedContractName = SpreadsheetText.Normalize(contractName ?? string.Empty);
+                return $"name:{normalizedContractName}";
+            }
+        }
     }
 }
 
@@ -234,7 +303,9 @@ public sealed partial class CompanyCatalogSpreadsheetReader(SpreadsheetWorkbookR
 public sealed record CompanyCatalogColumns(
     string CompanyColumn,
     string? MemberNameColumn,
-    string? ContractColumn)
+    string? MemberIdColumn,
+    string? ContractColumn,
+    string? ContractIdColumn)
 {
     /// <summary>
     /// Só a coluna de empresa é obrigatória: sem ela não há como descobrir o
@@ -244,7 +315,9 @@ public sealed record CompanyCatalogColumns(
     {
         string? companyColumn = null;
         string? memberNameColumn = null;
+        string? memberIdColumn = null;
         string? contractColumn = null;
+        string? contractIdColumn = null;
 
         foreach (var cellValue in headerRow.CellValuesByColumn)
         {
@@ -257,15 +330,28 @@ public sealed record CompanyCatalogColumns(
             {
                 memberNameColumn = cellValue.Key;
             }
+            else if (normalizedHeader == "idcliente")
+            {
+                memberIdColumn = cellValue.Key;
+            }
             else if (normalizedHeader == "contrato")
             {
                 contractColumn = cellValue.Key;
+            }
+            else if (normalizedHeader == "idcontrato")
+            {
+                contractIdColumn = cellValue.Key;
             }
         }
 
         return companyColumn is null
             ? null
-            : new CompanyCatalogColumns(companyColumn, memberNameColumn, contractColumn);
+            : new CompanyCatalogColumns(
+                companyColumn,
+                memberNameColumn,
+                memberIdColumn,
+                contractColumn,
+                contractIdColumn);
     }
 }
 
@@ -283,7 +369,13 @@ public sealed record ImportedCatalogCompany(
 
 public sealed record ImportedCatalogMember(
     int SourceRowNumber,
+    long EvoMemberId,
     string MemberName,
+    IReadOnlyCollection<ImportedCatalogContract> Contracts);
+
+public sealed record ImportedCatalogContract(
+    string ContractKey,
+    string? EvoContractId,
     string? ContractName);
 
 public sealed record CompanyCatalogWarning(

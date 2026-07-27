@@ -1,11 +1,40 @@
 name: evoque
 
 services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+      MYSQL_DATABASE: evoque_billing
+      MYSQL_USER: evoque_billing_app
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+    volumes:
+      - mysql_data:/var/lib/mysql
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mysqladmin ping -h 127.0.0.1 -u\"$${MYSQL_USER}\" -p\"$${MYSQL_PASSWORD}\" --silent",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - internal
+
   api:
     image: ghcr.io/arthur-queiroz/evoque-billing-api:${EVOQUE_API_IMAGE_TAG:-main}
+    depends_on:
+      mysql:
+        condition: service_healthy
     environment:
       ASPNETCORE_ENVIRONMENT: Production
-      ConnectionStrings__BillingDatabase: ${CONNECTIONSTRINGS__BILLINGDATABASE}
+      ConnectionStrings__BillingDatabase: "Server=mysql;Port=3306;Database=evoque_billing;User ID=evoque_billing_app;Password=${MYSQL_PASSWORD};SslMode=None;AllowPublicKeyRetrieval=True"
       Cors__AllowedOrigins__0: ${PUBLIC_APPLICATION_URL}
       Asaas__IntegrationEnvironment: ${ASAAS__INTEGRATIONENVIRONMENT}
       Asaas__BaseUrl: ${ASAAS__BASEURL}
@@ -46,3 +75,6 @@ services:
 networks:
   internal:
     driver: bridge
+
+volumes:
+  mysql_data:

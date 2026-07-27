@@ -11,7 +11,7 @@ Controllers → Services → Repositories → MySQL
 ```
 
 Em desenvolvimento, sem `ConnectionStrings:BillingDatabase`, os repositórios
-usam memória para permitir testar as regras sem acesso ao Azure. Em produção a
+usam memória para permitir testar as regras sem uma instância MySQL. Em produção a
 connection string é obrigatória; a API não inicia sem ela.
 
 ## Segurança do Asaas e envio do boleto
@@ -124,13 +124,17 @@ vazia.
 Defina a connection string fora do controle de versão:
 
 ```powershell
-dotnet user-secrets set "ConnectionStrings:BillingDatabase" "Server=...;Database=evoque_faturamento;User ID=...;Password=...;SslMode=VerifyFull"
+dotnet user-secrets set "ConnectionStrings:BillingDatabase" "Server=localhost;Port=3307;Database=evoque_billing;User ID=evoque_billing_app;Password=...;SslMode=None;AllowPublicKeyRetrieval=True"
 ```
 
+Em produção, o MySQL 8.4 roda como serviço interno do Compose, sem porta
+pública, com dados no volume persistente `mysql_data`. O workflow recebe a
+senha pelo secret `MYSQL_PASSWORD` do ambiente `production` e atualiza o
+arquivo protegido da VPS antes do deploy, sem registrar o valor nos logs.
+
 No primeiro uso, a aplicação registra migrations em `schema_migrations` e cria
-apenas as tabelas do novo produto, inclusive `charge_batches` e
-`charge_batch_items`. Aponte-a para um database dedicado; não use o schema
-legado sem inventariá-lo e aprová-lo.
+apenas as tabelas do novo produto, inclusive `charge_batches`,
+`charge_batch_items`, `companies` e `corporate_members`.
 
 ## Saúde e configuração de produção
 

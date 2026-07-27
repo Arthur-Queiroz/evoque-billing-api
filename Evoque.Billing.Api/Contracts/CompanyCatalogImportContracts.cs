@@ -11,10 +11,13 @@ public sealed record CompanyCatalogImportPreviewResponse(
     string FileName,
     int AnalyzedRowCount,
     int DiscoveredCompanyCount,
+    int NewCompanyCount,
+    int ExistingCompanyCount,
     int DiscoveredMemberCount,
     int DuplicateMemberCount,
     int InvalidTaxIdCount,
     int NameConflictCount,
+    CorporateMemberComparisonResponse MemberComparison,
     IReadOnlyCollection<CompanyCatalogImportCompanyResponse> Companies,
     IReadOnlyCollection<CompanyCatalogImportWarningResponse> Warnings);
 
@@ -22,8 +25,15 @@ public sealed record CompanyCatalogImportCompanyResponse(
     string TaxId,
     string FormattedTaxId,
     string EvoName,
+    bool IsAlreadyRegistered,
     int MemberCount,
-    IReadOnlyCollection<CompanyMemberResponse> Members);
+    IReadOnlyCollection<CompanyCatalogImportedMemberResponse> Members);
+
+public sealed record CompanyCatalogImportedMemberResponse(
+    long EvoMemberId,
+    string MemberName,
+    IReadOnlyCollection<string> Contracts,
+    int SourceRowNumber);
 
 public sealed record CompanyCatalogImportWarningResponse(
     int? SourceRowNumber,
@@ -45,15 +55,10 @@ public sealed record CompanyCatalogImportResponse(
     DateTimeOffset SynchronizedAt,
     string OperatorId,
     int CreatedCompanyCount,
-    int UpdatedCompanyCount,
-
-    /// <summary>Empresas atualizadas cujo nome operacional editado foi mantido.</summary>
-    int PreservedCompanyCount,
-
-    /// <summary>Empresas do catálogo que não apareceram nesta planilha.</summary>
-    int UnseenCompanyCount,
+    int IgnoredExistingCompanyCount,
     int RegistryEnrichedCount,
     int RegistryUnavailableCount,
+    CorporateMemberComparisonResponse MemberComparison,
     CompanyCatalogImportPreviewResponse Preview);
 
 /// <summary>Última sincronização do catálogo, exibida na tela de integrações.</summary>
@@ -65,8 +70,7 @@ public sealed record CompanyCatalogImportSummaryResponse(
     int AnalyzedRowCount,
     int DiscoveredCompanyCount,
     int CreatedCompanyCount,
-    int UpdatedCompanyCount,
-    int UnseenCompanyCount,
+    int IgnoredExistingCompanyCount,
     int WarningCount)
 {
     public static CompanyCatalogImportSummaryResponse FromDomain(CompanyCatalogImport companyCatalogImport)
@@ -79,8 +83,10 @@ public sealed record CompanyCatalogImportSummaryResponse(
             companyCatalogImport.AnalyzedRowCount,
             companyCatalogImport.DiscoveredCompanyCount,
             companyCatalogImport.CreatedCompanyCount,
-            companyCatalogImport.UpdatedCompanyCount,
-            companyCatalogImport.UnseenCompanyCount,
+            Math.Max(
+                0,
+                companyCatalogImport.DiscoveredCompanyCount
+                - companyCatalogImport.CreatedCompanyCount),
             companyCatalogImport.WarningCount);
     }
 }

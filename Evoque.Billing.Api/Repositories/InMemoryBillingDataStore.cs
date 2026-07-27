@@ -17,6 +17,8 @@ public sealed class InMemoryBillingDataStore
 
     public ConcurrentDictionary<string, Company> Companies { get; } = new();
 
+    public ConcurrentDictionary<long, CorporateMember> CorporateMembers { get; } = new();
+
     public ConcurrentDictionary<Guid, CompanyCatalogImport> CompanyCatalogImports { get; } = new();
 
     public ConcurrentDictionary<Guid, IReadOnlyCollection<CompanyCatalogImportMember>>

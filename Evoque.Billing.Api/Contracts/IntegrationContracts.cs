@@ -11,4 +11,5 @@ public sealed record IntegrationStatusResponse(
 public sealed record AsaasEnvironmentStatusResponse(
     string Environment,
     bool IsConfigured,
+    bool ReadOperationsEnabled,
     bool ChargeCreationEnabled);

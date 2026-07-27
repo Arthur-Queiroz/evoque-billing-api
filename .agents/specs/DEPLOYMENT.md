@@ -11,8 +11,9 @@ e nenhum operador executa `docker compose up` manualmente para publicar código.
 2. publica tags `main` e SHA no GHCR;
 3. torna a imagem disponível para pull da VPS;
 4. conecta como `root` pela chave de deploy e Cloudflare Access;
-5. envia a release de infraestrutura para `/opt/evoque/releases/api-<sha>`;
-6. executa o script versionado de deploy, aguarda `/health` e atualiza o link
+5. autentica o Docker da VPS no GHCR com o token efêmero do workflow;
+6. envia a release de infraestrutura para `/opt/evoque/releases/api-<sha>`;
+7. executa o script versionado de deploy, aguarda `/health` e atualiza o link
    `/opt/evoque/current` somente após sucesso.
 
 ## Configuração externa obrigatória
@@ -30,6 +31,10 @@ atualiza somente as quatro credenciais recebidas dos GitHub Environment
 Secrets. O Compose fixa URL, ambiente e autorização no Asaas Sandbox durante o
 MVP. Uma alteração para Produção exige revisão humana do Compose e das regras
 de negócio.
+
+O script grava os valores entre aspas simples no arquivo de ambiente. Isso é
+obrigatório para tokens que contêm `$`, pois o Compose não pode interpretá-los
+como referência a outra variável.
 
 Web e API são servidos pelo mesmo proxy e domínio. Por isso o CORS fica fechado
 por padrão em produção. `Cors:AllowedOrigins` só deve ser configurado quando

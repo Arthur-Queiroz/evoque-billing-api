@@ -73,15 +73,21 @@ jobs:
           ASAAS_API_KEY: ${{ secrets.ASAAS_API_KEY }}
           EVO_USERNAME: ${{ secrets.EVO_USERNAME }}
           EVO_API_KEY: ${{ secrets.EVO_API_KEY }}
+          GHCR_USERNAME: ${{ github.actor }}
+          GHCR_TOKEN: ${{ github.token }}
         run: |
           set -eu
           test -n "$MYSQL_PASSWORD"
           test -n "$ASAAS_API_KEY"
           test -n "$EVO_USERNAME"
           test -n "$EVO_API_KEY"
+          test -n "$GHCR_TOKEN"
           release_directory="/opt/evoque/releases/api-$RELEASE_NAME"
           ssh kvm2-evoque "install -d -m 700 '$release_directory'"
           tar --exclude-vcs -czf - . | ssh kvm2-evoque "tar -xzf - -C '$release_directory'"
+          printf '%s' "$GHCR_TOKEN" |
+            ssh kvm2-evoque \
+              "docker login ghcr.io --username '$GHCR_USERNAME' --password-stdin"
           printf '%s' "$MYSQL_PASSWORD" |
             ssh kvm2-evoque \
               "sh '$release_directory/infra/scripts/set-production-secret.sh' MYSQL_PASSWORD"

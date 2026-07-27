@@ -57,6 +57,89 @@ public sealed class AsaasCustomerGateway(
             responseData.TotalCount);
     }
 
+    public async Task<AsaasCustomer?> FindSandboxByTaxIdAsync(
+        string taxId,
+        CancellationToken cancellationToken)
+    {
+        var responseData = await ListSandboxAsync(
+            $"cpfCnpj={Uri.EscapeDataString(taxId)}&offset=0&limit=2",
+            cancellationToken);
+        return responseData.Data
+            .Where(customer => string.Equals(customer.CpfCnpj, taxId, StringComparison.Ordinal))
+            .Select(ToDomain)
+            .SingleOrDefault();
+    }
+
+    public async Task<AsaasCustomer> CreateSandboxAsync(
+        string name,
+        string taxId,
+        string email,
+        CancellationToken cancellationToken)
+    {
+        var connectionOptions = asaasOptions.Value.GetConnection(AsaasEnvironment.Sandbox);
+        AsaasOperationPolicy.ValidateChargeCreation(
+            hostEnvironment,
+            AsaasEnvironment.Sandbox,
+            connectionOptions);
+        AsaasOperationPolicy.ConfigureHttpClient(httpClient, connectionOptions);
+
+        using var response = await httpClient.PostAsJsonAsync(
+            "customers",
+            new
+            {
+                name,
+                cpfCnpj = taxId,
+                email,
+                notificationDisabled = false,
+            },
+            cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new ExternalOperationNotAllowedException(
+                $"O Asaas Sandbox recusou a criação do cliente com HTTP {(int)response.StatusCode}.");
+        }
+
+        var responseData = await response.Content.ReadFromJsonAsync<AsaasCustomerResponse>(
+            cancellationToken: cancellationToken)
+            ?? throw new ExternalOperationNotAllowedException(
+                "O Asaas Sandbox retornou uma resposta inválida ao criar o cliente.");
+        return ToDomain(responseData);
+    }
+
+    private async Task<AsaasCustomerListResponse> ListSandboxAsync(
+        string queryString,
+        CancellationToken cancellationToken)
+    {
+        var connectionOptions = asaasOptions.Value.GetConnection(AsaasEnvironment.Sandbox);
+        AsaasOperationPolicy.ValidateReadOperation(
+            hostEnvironment,
+            AsaasEnvironment.Sandbox,
+            connectionOptions);
+        AsaasOperationPolicy.ConfigureHttpClient(httpClient, connectionOptions);
+
+        using var response = await httpClient.GetAsync($"customers?{queryString}", cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new ExternalOperationNotAllowedException(
+                "Não foi possível consultar o cliente no Asaas Sandbox.");
+        }
+
+        return await response.Content.ReadFromJsonAsync<AsaasCustomerListResponse>(
+            cancellationToken: cancellationToken)
+            ?? throw new ExternalOperationNotAllowedException(
+                "O Asaas Sandbox retornou uma resposta inválida ao consultar clientes.");
+    }
+
+    private static AsaasCustomer ToDomain(AsaasCustomerResponse customer)
+    {
+        return new AsaasCustomer(
+            customer.Id,
+            customer.Name,
+            customer.CpfCnpj,
+            customer.Email,
+            customer.AdditionalEmails);
+    }
+
     private sealed record AsaasCustomerListResponse(
         IReadOnlyCollection<AsaasCustomerResponse> Data,
         bool HasMore,

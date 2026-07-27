@@ -98,14 +98,6 @@ public sealed class ChargeCreationService(
                 $"Cobrança Asaas {asaasCharge.PaymentId} criada com vencimento em {dueDate:yyyy-MM-dd}."),
             cancellationToken);
 
-        var billingDrafts = await billingDraftRepository.ListByBillingPeriodIdAsync(billingPeriod.Id, cancellationToken);
-        if (asaasEnvironment == AsaasEnvironment.Production
-            && billingDrafts.All(currentBillingDraft => currentBillingDraft.Status == BillingDraftStatus.ChargeCreated))
-        {
-            billingPeriod.MarkChargesCreated(updatedAt);
-            await billingPeriodRepository.UpdateAsync(billingPeriod, cancellationToken);
-        }
-
         return new ChargeCreationResult(asaasCharge.PaymentId, asaasCharge.BankSlipUrl, true);
     }
 }

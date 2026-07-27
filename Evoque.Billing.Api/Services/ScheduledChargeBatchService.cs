@@ -8,6 +8,7 @@ public sealed class ScheduledChargeBatchService(
     IBillingPeriodRepository billingPeriodRepository,
     IBillingDraftRepository billingDraftRepository,
     ICompanyBillingScheduleRepository companyBillingScheduleRepository,
+    ICompanyRepository companyRepository,
     ChargeBatchService chargeBatchService)
 {
     public async Task<ChargeBatchResponse> CreatePreviewAsync(
@@ -33,9 +34,15 @@ public sealed class ScheduledChargeBatchService(
             throw new ValidationException($"Não há empresas ativas configuradas para faturamento no dia {request.DueDate.Day:00}.");
         }
 
-        var scheduledCompanyIds = scheduledCompanies
-            .Select(companyBillingSchedule => companyBillingSchedule.ExternalCompanyId)
-            .ToHashSet(StringComparer.Ordinal);
+        var scheduledCompanyIds = await ExcludeInactiveCatalogCompaniesAsync(
+            scheduledCompanies,
+            cancellationToken);
+        if (scheduledCompanyIds.Count == 0)
+        {
+            throw new ValidationException(
+                $"As empresas agendadas para o dia {request.DueDate.Day:00} estão inativas no catálogo.");
+        }
+
         var billingDrafts = await billingDraftRepository.ListByBillingPeriodIdAsync(billingPeriod.Id, cancellationToken);
         var billingDraftIds = billingDrafts
             .Where(billingDraft => billingDraft.Status == BillingDraftStatus.Approved)
@@ -55,5 +62,31 @@ public sealed class ScheduledChargeBatchService(
                 request.AsaasEnvironment,
                 billingDraftIds),
             cancellationToken);
+    }
+
+    /// <summary>
+    /// Uma empresa inativada no catálogo não entra em lote novo, mesmo que uma
+    /// agenda ativa antiga tenha sobrado. Agendas cujo CNPJ ainda não existe no
+    /// catálogo continuam válidas, para não quebrar configurações anteriores.
+    /// </summary>
+    private async Task<HashSet<string>> ExcludeInactiveCatalogCompaniesAsync(
+        IReadOnlyCollection<CompanyBillingSchedule> scheduledCompanies,
+        CancellationToken cancellationToken)
+    {
+        var eligibleCompanyIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var companyBillingSchedule in scheduledCompanies)
+        {
+            var company = await companyRepository.FindByTaxIdAsync(
+                companyBillingSchedule.ExternalCompanyId,
+                cancellationToken);
+            if (company is not null && !company.IsActive)
+            {
+                continue;
+            }
+
+            eligibleCompanyIds.Add(companyBillingSchedule.ExternalCompanyId);
+        }
+
+        return eligibleCompanyIds;
     }
 }

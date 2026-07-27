@@ -1,4 +1,5 @@
 using Evoque.Billing.Api.Integrations.Asaas;
+using Evoque.Billing.Api.Integrations.CompanyRegistry;
 using Evoque.Billing.Api.Integrations.Evo;
 using Evoque.Billing.Api.Repositories;
 using Evoque.Billing.Api.Services;
@@ -21,8 +22,12 @@ builder.Services.AddHttpClient<AsaasChargeGateway>();
 builder.Services.AddHttpClient<AsaasCustomerNotificationGateway>();
 builder.Services.AddHttpClient<AsaasCustomerGateway>();
 builder.Services.AddHttpClient<EvoDirectoryGateway>();
+builder.Services.AddHttpClient<BrasilApiCompanyRegistryGateway>();
+builder.Services.AddMemoryCache();
 builder.Services.Configure<AsaasOptions>(builder.Configuration.GetSection(AsaasOptions.SectionName));
 builder.Services.Configure<EvoOptions>(builder.Configuration.GetSection(EvoOptions.SectionName));
+builder.Services.Configure<CompanyRegistryOptions>(
+    builder.Configuration.GetSection(CompanyRegistryOptions.SectionName));
 builder.Services.AddSingleton<StartupConfigurationValidator>();
 builder.Services.AddHealthChecks().AddCheck<BillingDatabaseHealthCheck>("billing_database");
 
@@ -41,6 +46,8 @@ if (string.IsNullOrWhiteSpace(billingDatabaseConnectionString))
     builder.Services.AddScoped<IAuditLogRepository, InMemoryAuditLogRepository>();
     builder.Services.AddScoped<IChargeBatchRepository, InMemoryChargeBatchRepository>();
     builder.Services.AddScoped<ICompanyBillingScheduleRepository, InMemoryCompanyBillingScheduleRepository>();
+    builder.Services.AddScoped<ICompanyRepository, InMemoryCompanyRepository>();
+    builder.Services.AddScoped<ICompanyCatalogImportRepository, InMemoryCompanyCatalogImportRepository>();
 }
 else
 {
@@ -51,6 +58,8 @@ else
     builder.Services.AddScoped<IAuditLogRepository, MySqlAuditLogRepository>();
     builder.Services.AddScoped<IChargeBatchRepository, MySqlChargeBatchRepository>();
     builder.Services.AddScoped<ICompanyBillingScheduleRepository, MySqlCompanyBillingScheduleRepository>();
+    builder.Services.AddScoped<ICompanyRepository, MySqlCompanyRepository>();
+    builder.Services.AddScoped<ICompanyCatalogImportRepository, MySqlCompanyCatalogImportRepository>();
 }
 
 builder.Services.AddScoped<IAsaasChargeGateway, AsaasChargeGateway>();
@@ -65,6 +74,16 @@ builder.Services.AddScoped<CompanyBillingScheduleService>();
 builder.Services.AddScoped<ScheduledChargeBatchService>();
 builder.Services.AddScoped<AsaasCustomerService>();
 builder.Services.AddScoped<EvoDirectoryService>();
+builder.Services.AddScoped<EvoCorporatePartnershipResolver>();
+builder.Services.AddScoped<CorporateBillingPreviewService>();
+builder.Services.AddScoped<ICompanyRegistryGateway, BrasilApiCompanyRegistryGateway>();
+builder.Services.AddScoped<CompanyRegistryEnrichmentService>();
+builder.Services.AddScoped<CompanyCatalogService>();
+builder.Services.AddScoped<CompanyCatalogSpreadsheetReader>();
+builder.Services.AddScoped<CompanyCatalogImportService>();
+builder.Services.AddScoped<SpreadsheetWorkbookReader>();
+builder.Services.AddScoped<BillingSpreadsheetReader>();
+builder.Services.AddScoped<BillingSpreadsheetImportService>();
 builder.Services.AddScoped<IntegrationStatusService>();
 builder.Services.AddScoped<MonthlyComparisonService>();
 

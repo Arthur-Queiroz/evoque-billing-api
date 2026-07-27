@@ -42,6 +42,20 @@ public sealed class EvoDirectoryController(EvoDirectoryService evoDirectoryServi
         return Ok(members);
     }
 
+    [HttpGet("corporate-members")]
+    [ProducesResponseType<EvoCorporateMemberListResponse>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<EvoCorporateMemberListResponse>> ListCorporateMembersAsync(
+        [FromQuery] int offset = 0,
+        [FromQuery] int limit = 25,
+        CancellationToken cancellationToken = default)
+    {
+        var corporateMembers = await evoDirectoryService.ListCorporateMembersAsync(
+            offset,
+            limit,
+            cancellationToken);
+        return Ok(corporateMembers);
+    }
+
     [HttpGet("companies")]
     [ProducesResponseType<EvoCompanyListResponse>(StatusCodes.Status200OK)]
     public async Task<ActionResult<EvoCompanyListResponse>> ListCompaniesAsync(

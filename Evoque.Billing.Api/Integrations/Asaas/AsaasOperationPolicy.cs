@@ -41,7 +41,19 @@ public static class AsaasOperationPolicy
             throw new ExternalOperationNotAllowedException("A chave da API do Asaas não está configurada.");
         }
 
-        httpClient.BaseAddress = new Uri(connectionOptions.BaseUrl, UriKind.Absolute);
+        var configuredBaseAddress = new Uri(connectionOptions.BaseUrl, UriKind.Absolute);
+        if (httpClient.BaseAddress is not null)
+        {
+            if (httpClient.BaseAddress != configuredBaseAddress)
+            {
+                throw new ExternalOperationNotAllowedException(
+                    "O cliente HTTP do Asaas não pode alternar de ambiente durante a mesma operação.");
+            }
+
+            return;
+        }
+
+        httpClient.BaseAddress = configuredBaseAddress;
         httpClient.DefaultRequestHeaders.Clear();
         httpClient.DefaultRequestHeaders.Add("access_token", connectionOptions.ApiKey);
         httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));

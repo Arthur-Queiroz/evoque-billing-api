@@ -7,6 +7,16 @@ public interface IAsaasCustomerGateway
         int offset,
         int limit,
         CancellationToken cancellationToken);
+
+    Task<AsaasCustomer?> FindSandboxByTaxIdAsync(
+        string taxId,
+        CancellationToken cancellationToken);
+
+    Task<AsaasCustomer> CreateSandboxAsync(
+        string name,
+        string taxId,
+        string email,
+        CancellationToken cancellationToken);
 }
 
 public sealed record AsaasCustomerPage(

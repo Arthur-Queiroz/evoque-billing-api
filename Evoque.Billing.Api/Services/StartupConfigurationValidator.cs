@@ -62,10 +62,10 @@ public sealed class StartupConfigurationValidator(
         }
 
         var allowedCorsOrigins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
-        if (allowedCorsOrigins.Length == 0 || allowedCorsOrigins.Any(IsNotHttpsOrigin))
+        if (allowedCorsOrigins.Any(IsNotHttpsOrigin))
         {
             throw new InvalidOperationException(
-                "Cors:AllowedOrigins deve conter somente origens HTTPS em produção.");
+                "Cors:AllowedOrigins deve conter somente origens HTTPS quando configurado em produção.");
         }
     }
 

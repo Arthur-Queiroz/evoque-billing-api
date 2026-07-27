@@ -5,18 +5,24 @@ namespace Evoque.Billing.Api.Repositories;
 
 public sealed class MySqlAuditLogRepository(MySqlConnectionFactory connectionFactory) : IAuditLogRepository
 {
+    internal const string InsertCommandText = """
+        INSERT INTO audit_logs
+            (id, action, operator_id, occurred_at, billing_period_id, billing_draft_id, details)
+        VALUES
+            (@id, @action, @operatorId, @occurredAt, @billingPeriodId, @billingDraftId, @details);
+        """;
+
     public async Task AddAsync(AuditLog auditLog, CancellationToken cancellationToken)
     {
-        const string commandText = """
-            INSERT INTO audit_logs
-                (id, action, operator_id, occurred_at, billing_period_id, billing_draft_id, details)
-            VALUES
-                (@id, @action, @operatorId, @occurredAt, @billingPeriodId, @billingDraftId, @details);
-            """;
-
         await using var connection = connectionFactory.CreateConnection();
         await connection.OpenAsync(cancellationToken);
-        await using var command = new MySqlCommand(commandText, connection);
+        await using var command = new MySqlCommand(InsertCommandText, connection);
+        AddParameters(command, auditLog);
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    internal static void AddParameters(MySqlCommand command, AuditLog auditLog)
+    {
         command.Parameters.AddWithValue("@id", auditLog.Id.ToString());
         command.Parameters.AddWithValue("@action", auditLog.Action);
         command.Parameters.AddWithValue("@operatorId", auditLog.OperatorId);
@@ -24,7 +30,6 @@ public sealed class MySqlAuditLogRepository(MySqlConnectionFactory connectionFac
         command.Parameters.AddWithValue("@billingPeriodId", auditLog.BillingPeriodId?.ToString() ?? (object)DBNull.Value);
         command.Parameters.AddWithValue("@billingDraftId", auditLog.BillingDraftId?.ToString() ?? (object)DBNull.Value);
         command.Parameters.AddWithValue("@details", auditLog.Details);
-        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyCollection<AuditLog>> ListByBillingDraftIdAsync(

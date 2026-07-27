@@ -21,10 +21,7 @@ public sealed record CompanyBillingSchedule(
             throw new ValidationException("O identificador externo da empresa é obrigatório.");
         }
 
-        if (!SupportedBillingDays.Contains(billingDay))
-        {
-            throw new ValidationException("O dia de faturamento deve ser 02, 18, 20 ou 25.");
-        }
+        ValidateBillingDay(billingDay);
 
         if (string.IsNullOrWhiteSpace(updatedBy))
         {
@@ -32,5 +29,13 @@ public sealed record CompanyBillingSchedule(
         }
 
         return new CompanyBillingSchedule(externalCompanyId.Trim(), billingDay, isActive, updatedBy.Trim(), updatedAt);
+    }
+
+    public static void ValidateBillingDay(int billingDay)
+    {
+        if (!SupportedBillingDays.Contains(billingDay))
+        {
+            throw new ValidationException("O dia de faturamento deve ser 02, 18, 20 ou 25.");
+        }
     }
 }

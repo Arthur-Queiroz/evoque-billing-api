@@ -14,4 +14,14 @@ public sealed class InMemoryBillingDataStore
     public ConcurrentDictionary<Guid, ChargeBatch> ChargeBatches { get; } = new();
 
     public ConcurrentDictionary<string, CompanyBillingSchedule> CompanyBillingSchedules { get; } = new();
+
+    public ConcurrentDictionary<string, Company> Companies { get; } = new();
+
+    public ConcurrentDictionary<long, CorporateMember> CorporateMembers { get; } = new();
+
+    public ConcurrentDictionary<Guid, CompanyCatalogImport> CompanyCatalogImports { get; } = new();
+
+    public ConcurrentDictionary<Guid, IReadOnlyCollection<CompanyCatalogImportMember>>
+        CompanyCatalogImportMembers
+    { get; } = new();
 }

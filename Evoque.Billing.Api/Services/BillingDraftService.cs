@@ -16,6 +16,10 @@ public sealed class BillingDraftService(
     {
         var billingPeriod = await GetBillingPeriodAsync(reference, cancellationToken);
         ValidateNewDraft(billingPeriod);
+        await ValidateDraftDoesNotAlreadyExistAsync(
+            billingPeriod.Id,
+            command.ExternalCompanyId,
+            cancellationToken);
 
         var items = command.Items
             .Select(item => new BillingDraftItem(item.Description, item.Quantity, item.UnitAmount, item.ExternalMemberId))
@@ -113,9 +117,28 @@ public sealed class BillingDraftService(
 
     private static void ValidateNewDraft(BillingPeriod billingPeriod)
     {
-        if (billingPeriod.Status is BillingPeriodStatus.Approved or BillingPeriodStatus.ChargesCreated)
+        if (billingPeriod.Status == BillingPeriodStatus.ChargesCreated)
         {
-            throw new ConflictException("Não é possível criar prévias em uma competência aprovada ou faturada.");
+            throw new ConflictException("Não é possível criar prévias em uma competência encerrada.");
+        }
+    }
+
+    private async Task ValidateDraftDoesNotAlreadyExistAsync(
+        Guid billingPeriodId,
+        string externalCompanyId,
+        CancellationToken cancellationToken)
+    {
+        var existingBillingDrafts = await billingDraftRepository.ListByBillingPeriodIdAsync(
+            billingPeriodId,
+            cancellationToken);
+        if (existingBillingDrafts.Any(existingBillingDraft =>
+                string.Equals(
+                    existingBillingDraft.ExternalCompanyId,
+                    externalCompanyId,
+                    StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new ConflictException(
+                "Já existe uma prévia para esta empresa e competência.");
         }
     }
 
@@ -125,7 +148,10 @@ public sealed class BillingDraftService(
         CancellationToken cancellationToken)
     {
         var billingDrafts = await billingDraftRepository.ListByBillingPeriodIdAsync(billingPeriodId, cancellationToken);
-        if (billingDrafts.Count == 0 || billingDrafts.Any(billingDraft => billingDraft.Status != BillingDraftStatus.Approved))
+        if (billingDrafts.Count == 0
+            || billingDrafts.Any(billingDraft =>
+                billingDraft.Status is not BillingDraftStatus.Approved
+                    and not BillingDraftStatus.ChargeCreated))
         {
             return;
         }

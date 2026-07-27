@@ -94,6 +94,42 @@ public sealed class MySqlBillingDraftRepository(MySqlConnectionFactory connectio
         return billingDrafts;
     }
 
+    public async Task<IReadOnlyCollection<BillingDraft>> ListByExternalCompanyIdAsync(
+        string externalCompanyId,
+        CancellationToken cancellationToken)
+    {
+        const string commandText = """
+            SELECT id, billing_period_id, external_company_id, company_name, company_tax_id,
+                   asaas_customer_id, status, version, approved_by, approved_at, asaas_payment_id,
+                   bank_slip_url, created_at, updated_at
+            FROM billing_drafts
+            WHERE external_company_id = @externalCompanyId
+            ORDER BY created_at DESC;
+            """;
+
+        var billingDraftDataItems = new List<BillingDraftData>();
+        await using var connection = connectionFactory.CreateConnection();
+        await connection.OpenAsync(cancellationToken);
+        await using (var command = new MySqlCommand(commandText, connection))
+        {
+            command.Parameters.AddWithValue("@externalCompanyId", externalCompanyId);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                billingDraftDataItems.Add(ReadBillingDraftData(reader));
+            }
+        }
+
+        var billingDrafts = new List<BillingDraft>();
+        foreach (var billingDraftData in billingDraftDataItems)
+        {
+            var items = await ListItemsAsync(connection, billingDraftData.Id, cancellationToken);
+            billingDrafts.Add(RestoreBillingDraft(billingDraftData, items));
+        }
+
+        return billingDrafts;
+    }
+
     public async Task UpdateAsync(BillingDraft billingDraft, CancellationToken cancellationToken)
     {
         const string commandText = """

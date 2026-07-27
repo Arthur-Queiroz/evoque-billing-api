@@ -20,6 +20,20 @@ public interface IEvoDirectoryGateway
         int status,
         CancellationToken cancellationToken);
 
+    Task<IReadOnlyCollection<EvoMemberMembership>> ListMemberMembershipsAsync(
+        int take,
+        int skip,
+        CancellationToken cancellationToken);
+
+    Task<IReadOnlyCollection<EvoReceivable>> ListReceivablesAsync(
+        DateOnly competenceDateStart,
+        DateOnly competenceDateEnd,
+        int take,
+        int skip,
+        CancellationToken cancellationToken);
+
+    Task<EvoSale> GetSaleByIdAsync(int saleId, CancellationToken cancellationToken);
+
     Task<IReadOnlyCollection<EvoBranchGroup>> ListBranchGroupsAsync(CancellationToken cancellationToken);
 }
 
@@ -65,6 +79,52 @@ public sealed record EvoCompany(
     string? TradeName,
     string? TaxId,
     bool IsDeleted);
+
+public sealed record EvoMemberMembership(
+    int MemberId,
+    string MemberName,
+    int MembershipId,
+    int MemberMembershipId,
+    int BranchId,
+    int? SaleId,
+    decimal? SaleValue,
+    string? MembershipName,
+    int? Status);
+
+public sealed record EvoReceivable(
+    int Id,
+    int? SaleId,
+    int? MemberPayerId,
+    string? PayerName,
+    DateOnly? CompetenceDate,
+    DateOnly? DueDate,
+    decimal Amount,
+    int? StatusId,
+    string? StatusName,
+    int? PaymentTypeId,
+    string? PaymentTypeName,
+    int? CurrentInstallment,
+    int? TotalInstallments);
+
+public sealed record EvoSale(
+    int Id,
+    int MemberId,
+    int? CorporatePartnershipId,
+    string? CorporatePartnershipName,
+    bool Removed = false,
+    DateTimeOffset? SaleDate = null,
+    IReadOnlyCollection<EvoSaleItem>? Items = null);
+
+public sealed record EvoSaleItem(
+    int Id,
+    int? MembershipId,
+    int? MemberMembershipId,
+    string? Name,
+    decimal? ItemValue,
+    decimal? SaleValue,
+    decimal? CorporateDiscount,
+    int? CorporatePartnershipId,
+    string? CorporatePartnershipName);
 
 public sealed record EvoBranchGroup(int Id, string Name, IReadOnlyCollection<EvoBranch> Branches);
 

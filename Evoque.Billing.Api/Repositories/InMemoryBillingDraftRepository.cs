@@ -32,6 +32,18 @@ public sealed class InMemoryBillingDraftRepository(InMemoryBillingDataStore data
         return Task.FromResult<IReadOnlyCollection<BillingDraft>>(billingDrafts);
     }
 
+    public Task<IReadOnlyCollection<BillingDraft>> ListByExternalCompanyIdAsync(
+        string externalCompanyId,
+        CancellationToken cancellationToken)
+    {
+        var billingDrafts = dataStore.BillingDrafts.Values
+            .Where(billingDraft => billingDraft.ExternalCompanyId == externalCompanyId)
+            .OrderByDescending(billingDraft => billingDraft.CreatedAt)
+            .ToArray();
+
+        return Task.FromResult<IReadOnlyCollection<BillingDraft>>(billingDrafts);
+    }
+
     public Task UpdateAsync(BillingDraft billingDraft, CancellationToken cancellationToken)
     {
         dataStore.BillingDrafts[billingDraft.Id] = billingDraft;

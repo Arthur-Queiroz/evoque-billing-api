@@ -74,6 +74,40 @@ public sealed class BillingWorkflowTests
     }
 
     [Fact]
+    public async Task CreateAsync_AllowsAddingAnotherCompanyToAnApprovedOpenPeriod()
+    {
+        var services = CreateServices();
+        var billingPeriodReference = new BillingPeriodReference(2026, 8);
+
+        await services.BillingPeriodService.CreateAsync(billingPeriodReference, "maria", CancellationToken.None);
+        var firstBillingDraft = await services.BillingDraftService.CreateAsync(
+            billingPeriodReference,
+            CreateDraftCommand("empresa-1", "Evoque Empresa Um"),
+            "maria",
+            CancellationToken.None);
+        await services.BillingDraftService.ApproveAsync(firstBillingDraft.Id, "maria", CancellationToken.None);
+
+        var secondBillingDraft = await services.BillingDraftService.CreateAsync(
+            billingPeriodReference,
+            CreateDraftCommand("empresa-2", "Evoque Empresa Dois"),
+            "maria",
+            CancellationToken.None);
+
+        var billingPeriodAfterSecondDraft = await services.BillingPeriodService.GetByReferenceAsync(
+            billingPeriodReference,
+            CancellationToken.None);
+        Assert.Equal(BillingDraftStatus.PendingReview, secondBillingDraft.Status);
+        Assert.Equal(BillingPeriodStatus.AwaitingReview, billingPeriodAfterSecondDraft.Status);
+
+        await services.BillingDraftService.ApproveAsync(secondBillingDraft.Id, "maria", CancellationToken.None);
+
+        var billingPeriodAfterSecondApproval = await services.BillingPeriodService.GetByReferenceAsync(
+            billingPeriodReference,
+            CancellationToken.None);
+        Assert.Equal(BillingPeriodStatus.Approved, billingPeriodAfterSecondApproval.Status);
+    }
+
+    [Fact]
     public async Task CreateAsync_DoesNotCallAsaasWithoutExplicitOperatorConfirmation()
     {
         var asaasChargeGateway = new RecordingAsaasChargeGateway();
@@ -308,6 +342,44 @@ public sealed class BillingWorkflowTests
     }
 
     [Fact]
+    public async Task ScheduledPreviewAsync_ExcludesCompaniesDeactivatedInTheCatalog()
+    {
+        const string openSportsTaxId = "56087276000103";
+        var services = CreateServices();
+        var billingPeriodReference = new BillingPeriodReference(2026, 8);
+
+        await services.BillingPeriodService.CreateAsync(billingPeriodReference, "maria", CancellationToken.None);
+        var billingDraft = await services.BillingDraftService.CreateAsync(
+            billingPeriodReference,
+            CreateDraftCommand(openSportsTaxId, "Open Sports"),
+            "maria",
+            CancellationToken.None);
+        await services.BillingDraftService.ApproveAsync(billingDraft.Id, "maria", CancellationToken.None);
+        await services.CompanyBillingScheduleService.UpsertAsync(
+            openSportsTaxId,
+            new UpsertCompanyBillingScheduleRequest(20, true, "maria"),
+            CancellationToken.None);
+
+        // A empresa é inativada no catálogo, mas a agenda ativa permanece.
+        var company = Company.CreateManually(
+            openSportsTaxId,
+            "Open Sports",
+            "maria",
+            DateTimeOffset.UtcNow);
+        company.Deactivate("maria", DateTimeOffset.UtcNow);
+        await services.CompanyRepository.UpsertAsync(company, CancellationToken.None);
+
+        await Assert.ThrowsAsync<ValidationException>(() =>
+            services.ScheduledChargeBatchService.CreatePreviewAsync(
+                billingPeriodReference,
+                new CreateScheduledChargeBatchPreviewRequest(
+                    "maria",
+                    new DateOnly(2026, 8, 20),
+                    "Sandbox"),
+                CancellationToken.None));
+    }
+
+    [Fact]
     public async Task RetryFailedAsync_CreatesOnlyTheItemsThatFailedInTheOriginalBatch()
     {
         var asaasChargeGateway = new RecordingAsaasChargeGateway(failOnCall: 2);
@@ -373,6 +445,7 @@ public sealed class BillingWorkflowTests
         var auditLogRepository = new InMemoryAuditLogRepository(dataStore);
         var chargeBatchRepository = new InMemoryChargeBatchRepository(dataStore);
         var companyBillingScheduleRepository = new InMemoryCompanyBillingScheduleRepository(dataStore);
+        var companyRepository = new InMemoryCompanyRepository(dataStore);
         var chargeCreationService = new ChargeCreationService(
             billingPeriodRepository,
             billingDraftRepository,
@@ -401,7 +474,9 @@ public sealed class BillingWorkflowTests
                 billingPeriodRepository,
                 billingDraftRepository,
                 companyBillingScheduleRepository,
-                chargeBatchService));
+                companyRepository,
+                chargeBatchService),
+            companyRepository);
     }
 
     private sealed record TestServices(
@@ -410,7 +485,8 @@ public sealed class BillingWorkflowTests
         ChargeCreationService ChargeCreationService,
         ChargeBatchService ChargeBatchService,
         CompanyBillingScheduleService CompanyBillingScheduleService,
-        ScheduledChargeBatchService ScheduledChargeBatchService);
+        ScheduledChargeBatchService ScheduledChargeBatchService,
+        InMemoryCompanyRepository CompanyRepository);
 
     private sealed class RecordingAsaasChargeGateway(int? failOnCall = null) : IAsaasChargeGateway
     {

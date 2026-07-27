@@ -13,3 +13,12 @@ public sealed record AsaasCustomerListResponse(
     bool HasMore,
     int Offset,
     int TotalCount);
+
+public sealed record CreateSandboxAsaasCustomerRequest(
+    string Name,
+    string TaxId,
+    string Email);
+
+public sealed record CreateSandboxAsaasCustomerResponse(
+    AsaasCustomerResponse Customer,
+    bool CreatedNow);

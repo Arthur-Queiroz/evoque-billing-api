@@ -17,13 +17,35 @@ e nenhum operador executa `docker compose up` manualmente para publicar código.
 
 ## Configuração externa obrigatória
 
-- GitHub Secret: `KVM2_DEPLOY_SSH_PRIVATE_KEY`;
+- GitHub Secret de repositório: `KVM2_DEPLOY_SSH_PRIVATE_KEY`;
+- GitHub Environment Secrets em `production`: `MYSQL_PASSWORD`,
+  `ASAAS_API_KEY`, `EVO_USERNAME` e `EVO_API_KEY`;
 - GitHub Variables: `DEPLOY_ENABLED`, `KVM2_DEPLOY_HOST`,
   `KVM2_CLOUDFLARE_SSH_HOST`;
 - VPS: Docker, Docker Compose, Cloudflared e `/opt/evoque/production.env`;
 - Proxy HTTPS externo: encaminha o domínio para `127.0.0.1:8085`.
 
-`production.env` nunca é enviado pelo workflow. Durante o MVP ele usa somente
-credenciais Sandbox do Asaas; uma alteração para Produção exige revisão humana
-das variáveis e das regras de negócio.
+O arquivo completo `production.env` nunca é enviado pelo workflow. A pipeline
+atualiza somente as quatro credenciais recebidas dos GitHub Environment
+Secrets. O Compose fixa URL, ambiente e autorização no Asaas Sandbox durante o
+MVP. Uma alteração para Produção exige revisão humana do Compose e das regras
+de negócio.
 
+Web e API são servidos pelo mesmo proxy e domínio. Por isso o CORS fica fechado
+por padrão em produção. `Cors:AllowedOrigins` só deve ser configurado quando
+existir um consumidor web em uma origem HTTPS diferente.
+
+## Banco e recuperação
+
+- O Compose mantém MySQL 8.4 no serviço interno `mysql`, database
+  `evoque_billing`, sem publicar a porta 3306.
+- Os dados persistem no volume Docker `mysql_data`; recriar containers não
+  remove o catálogo nem os colaboradores.
+- Antes de atualizar os containers, o deploy gera um dump comprimido em
+  `/opt/evoque/backups/mysql`.
+- Os dumps recebem permissão `0600` e são retidos por 30 dias.
+- O volume não substitui backup. A restauração deve ser ensaiada antes de
+  qualquer migração futura para outra instância MySQL.
+- `MYSQL_PASSWORD` inicializa o usuário na primeira criação do volume. Sua
+  rotação exige alterar a senha dentro do MySQL e o Secret no mesmo
+  procedimento; trocar somente o Secret interrompe a conexão da API.

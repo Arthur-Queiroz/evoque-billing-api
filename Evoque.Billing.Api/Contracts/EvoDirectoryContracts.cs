@@ -38,6 +38,25 @@ public sealed record EvoMemberListResponse(
     int Offset,
     int Limit);
 
+public sealed record EvoCorporateMemberResponse(
+    int MemberId,
+    string MemberName,
+    int MembershipId,
+    int MemberMembershipId,
+    int BranchId,
+    int SaleId,
+    decimal? SaleValue,
+    string? MembershipName,
+    int? MembershipStatus,
+    int CorporatePartnershipId,
+    string CorporatePartnershipName);
+
+public sealed record EvoCorporateMemberListResponse(
+    IReadOnlyCollection<EvoCorporateMemberResponse> CorporateMembers,
+    int Offset,
+    int Limit,
+    int ProcessedMemberMembershipCount);
+
 public sealed record EvoCompanyResponse(
     int PartnershipId,
     string PartnershipDescription,

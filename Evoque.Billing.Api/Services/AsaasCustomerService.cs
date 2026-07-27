@@ -1,6 +1,7 @@
 using Evoque.Billing.Api.Contracts;
 using Evoque.Billing.Api.Domain;
 using Evoque.Billing.Api.Integrations.Asaas;
+using System.Net.Mail;
 
 namespace Evoque.Billing.Api.Services;
 
@@ -43,5 +44,71 @@ public sealed class AsaasCustomerService(
             customerPage.HasMore,
             safeOffset,
             customerPage.TotalCount);
+    }
+
+    public async Task<CreateSandboxAsaasCustomerResponse> CreateSandboxAsync(
+        CreateSandboxAsaasCustomerRequest request,
+        CancellationToken cancellationToken)
+    {
+        var name = request.Name?.Trim();
+        var taxId = new string((request.TaxId ?? string.Empty).Where(char.IsDigit).ToArray());
+        var email = request.Email?.Trim();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            throw new ValidationException("O nome da empresa é obrigatório.");
+        }
+
+        if (taxId.Length != 14)
+        {
+            throw new ValidationException("O CNPJ da empresa deve possuir 14 dígitos.");
+        }
+
+        if (!MailAddress.TryCreate(email, out _))
+        {
+            throw new ValidationException("O e-mail do cliente Sandbox é inválido.");
+        }
+
+        var lookupResult = await asaasCustomerGateway.FindByTaxIdAsync(
+            AsaasEnvironment.Sandbox,
+            taxId,
+            cancellationToken);
+        if (lookupResult.Status == AsaasCustomerLookupStatus.Ambiguous)
+        {
+            throw new ConflictException(
+                $"Foram encontrados {lookupResult.MatchCount} clientes Sandbox para o mesmo CNPJ.");
+        }
+
+        if (lookupResult.Customer is not null)
+        {
+            return new CreateSandboxAsaasCustomerResponse(
+                await CreateResponseAsync(lookupResult.Customer, cancellationToken),
+                false);
+        }
+
+        var createdCustomer = await asaasCustomerGateway.CreateSandboxAsync(
+            name,
+            taxId,
+            email!,
+            cancellationToken);
+        return new CreateSandboxAsaasCustomerResponse(
+            await CreateResponseAsync(createdCustomer, cancellationToken),
+            true);
+    }
+
+    private async Task<AsaasCustomerResponse> CreateResponseAsync(
+        AsaasCustomer asaasCustomer,
+        CancellationToken cancellationToken)
+    {
+        var emailDeliveryReadiness = await asaasCustomerNotificationGateway.GetEmailDeliveryReadinessAsync(
+            AsaasEnvironment.Sandbox,
+            asaasCustomer.Id,
+            cancellationToken);
+        return new AsaasCustomerResponse(
+            asaasCustomer.Id,
+            asaasCustomer.Name,
+            asaasCustomer.TaxId,
+            asaasCustomer.Email,
+            emailDeliveryReadiness.HasEmailRecipient,
+            emailDeliveryReadiness.PaymentCreatedEmailEnabled);
     }
 }

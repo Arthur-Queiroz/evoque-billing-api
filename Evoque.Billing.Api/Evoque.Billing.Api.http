@@ -23,6 +23,10 @@ Accept: application/json
 GET {{EvoqueBillingApiHostAddress}}/api/evo/members?status=1&limit=25
 Accept: application/json
 
+### Corporate membership links composed from EVO membership and sale records. Read-only.
+GET {{EvoqueBillingApiHostAddress}}/api/evo/corporate-members?offset=0&limit=25
+Accept: application/json
+
 ### Empresas e convênios retornados pelo Evo — somente leitura.
 GET {{EvoqueBillingApiHostAddress}}/api/evo/companies
 Accept: application/json

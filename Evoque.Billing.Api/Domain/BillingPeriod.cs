@@ -43,9 +43,9 @@ public sealed class BillingPeriod
 
     public void MarkAwaitingReview(DateTimeOffset updatedAt)
     {
-        if (Status is BillingPeriodStatus.Approved or BillingPeriodStatus.ChargesCreated)
+        if (Status == BillingPeriodStatus.ChargesCreated)
         {
-            throw new ConflictException("Não é possível alterar uma competência já aprovada ou faturada.");
+            throw new ConflictException("Não é possível alterar uma competência já encerrada.");
         }
 
         Status = BillingPeriodStatus.AwaitingReview;

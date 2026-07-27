@@ -23,4 +23,17 @@ public sealed class AsaasCustomersController(AsaasCustomerService asaasCustomerS
             cancellationToken);
         return Ok(customers);
     }
+
+    [HttpPost("sandbox")]
+    [ProducesResponseType<CreateSandboxAsaasCustomerResponse>(StatusCodes.Status201Created)]
+    [ProducesResponseType<CreateSandboxAsaasCustomerResponse>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<CreateSandboxAsaasCustomerResponse>> CreateSandboxAsync(
+        CreateSandboxAsaasCustomerRequest request,
+        CancellationToken cancellationToken)
+    {
+        var response = await asaasCustomerService.CreateSandboxAsync(request, cancellationToken);
+        return response.CreatedNow
+            ? StatusCode(StatusCodes.Status201Created, response)
+            : Ok(response);
+    }
 }

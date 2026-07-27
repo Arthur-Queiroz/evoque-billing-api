@@ -12,5 +12,13 @@ public interface IBillingDraftRepository
         Guid billingPeriodId,
         CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Histórico de faturamento de uma empresa do catálogo. O identificador é o
+    /// CNPJ normalizado, o mesmo que a importação de fechamento já grava.
+    /// </summary>
+    Task<IReadOnlyCollection<BillingDraft>> ListByExternalCompanyIdAsync(
+        string externalCompanyId,
+        CancellationToken cancellationToken);
+
     Task UpdateAsync(BillingDraft billingDraft, CancellationToken cancellationToken);
 }

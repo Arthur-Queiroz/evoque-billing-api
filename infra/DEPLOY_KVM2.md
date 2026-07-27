@@ -30,6 +30,7 @@ Preencha `/opt/evoque/production.env` a partir de
 ```text
 MYSQL_PASSWORD=preenchido-pelo-github-actions
 ASAAS__APIKEY=preenchido-pelo-github-actions
+ASAAS__PRODUCTION__APIKEY=preenchido-pelo-github-actions
 EVO__USERNAME=preenchido-pelo-github-actions
 EVO__APIKEY=preenchido-pelo-github-actions
 ```
@@ -56,7 +57,8 @@ Em **ambos** os repositórios, configure:
 - Variable `KVM2_CLOUDFLARE_SSH_HOST`, por exemplo `ssh.devarthur.com.br`.
 
 No repositório da API, configure também os Environment Secrets
-`MYSQL_PASSWORD`, `ASAAS_API_KEY`, `EVO_USERNAME` e `EVO_API_KEY` no ambiente
+`MYSQL_PASSWORD`, `ASAAS_API_KEY`, `ASAAS_PRODUCTION_API_KEY`, `EVO_USERNAME`
+e `EVO_API_KEY` no ambiente
 `production`.
 
 A chave pública correspondente deve estar em `/root/.ssh/authorized_keys`. O

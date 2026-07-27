@@ -7,7 +7,7 @@ environment_file="${EVOQUE_ENV_FILE:-/opt/evoque/production.env}"
 case "$environment_key" in
   MYSQL_PASSWORD)
     ;;
-  ASAAS__APIKEY | EVO__USERNAME | EVO__APIKEY)
+  ASAAS__APIKEY | ASAAS__PRODUCTION__APIKEY | EVO__USERNAME | EVO__APIKEY)
     ;;
   *)
     echo "Chave de ambiente não permitida: $environment_key" >&2

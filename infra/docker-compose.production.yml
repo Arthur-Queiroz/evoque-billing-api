@@ -39,6 +39,12 @@ services:
       Asaas__BaseUrl: https://api-sandbox.asaas.com/v3/
       Asaas__ApiKey: ${ASAAS__APIKEY}
       Asaas__AllowChargeCreation: "true"
+      Asaas__Sandbox__BaseUrl: https://api-sandbox.asaas.com/v3/
+      Asaas__Sandbox__ApiKey: ${ASAAS__APIKEY}
+      Asaas__Sandbox__AllowChargeCreation: "true"
+      Asaas__Production__BaseUrl: https://api.asaas.com/v3/
+      Asaas__Production__ApiKey: ${ASAAS__PRODUCTION__APIKEY}
+      Asaas__Production__AllowChargeCreation: "false"
       Evo__BaseUrl: https://evo-integracao-api.w12app.com.br
       Evo__Username: ${EVO__USERNAME:-}
       Evo__ApiKey: ${EVO__APIKEY:-}

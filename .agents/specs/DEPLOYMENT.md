@@ -25,7 +25,7 @@ inicialização.
 
 - GitHub Secret de repositório: `KVM2_DEPLOY_SSH_PRIVATE_KEY`;
 - GitHub Environment Secrets em `production`: `MYSQL_PASSWORD`,
-  `ASAAS_API_KEY`, `EVO_USERNAME` e `EVO_API_KEY`;
+  `ASAAS_API_KEY`, `ASAAS_PRODUCTION_API_KEY`, `EVO_USERNAME` e `EVO_API_KEY`;
 - GitHub Variables: `DEPLOY_ENABLED`, `KVM2_DEPLOY_HOST`,
   `KVM2_CLOUDFLARE_SSH_HOST`;
 - VPS: Docker, Docker Compose, Cloudflared e `/opt/evoque/production.env`;
@@ -33,10 +33,10 @@ inicialização.
   `127.0.0.1:8088`.
 
 O arquivo completo `production.env` nunca é enviado pelo workflow. A pipeline
-atualiza somente as quatro credenciais recebidas dos GitHub Environment
-Secrets. O Compose fixa URL, ambiente e autorização no Asaas Sandbox durante o
-MVP. Uma alteração para Produção exige revisão humana do Compose e das regras
-de negócio.
+atualiza somente as cinco credenciais recebidas dos GitHub Environment
+Secrets. O Compose permite mutações somente no Asaas Sandbox. A credencial de
+Produção habilita consultas e vínculo de clientes por CNPJ, mas
+`Asaas__Production__AllowChargeCreation` permanece fixado como `false`.
 
 O script grava os valores entre aspas simples no arquivo de ambiente. Isso é
 obrigatório para tokens que contêm `$`, pois o Compose não pode interpretá-los

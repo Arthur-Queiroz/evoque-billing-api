@@ -3,8 +3,9 @@
 ## Ambientes
 
 - **Sandbox:** pode criar cobranças de teste após aprovação e confirmação.
-- **Produção:** permanece bloqueada até autorização operacional explícita e
-  configuração independente do Asaas.
+- **Produção:** a credencial independente pode habilitar consultas e vínculo
+  de clientes por CNPJ, mas a criação de cobranças permanece bloqueada até
+  autorização operacional explícita.
 - O seletor visual nunca é autorização suficiente para criar cobranças reais.
 
 ## Fluxo de faturamento

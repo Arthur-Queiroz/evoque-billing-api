@@ -26,12 +26,17 @@ if [ -z "$secret_value" ]; then
   exit 1
 fi
 
+if printf '%s' "$secret_value" | LC_ALL=C grep -q "[[:cntrl:]']"; then
+  echo "O valor secreto contém caractere incompatível com o arquivo de ambiente." >&2
+  exit 1
+fi
+
 temporary_file="${environment_file}.tmp.$$"
 trap 'rm -f "$temporary_file"' EXIT HUP INT TERM
 
 umask 077
 grep -v "^${environment_key}=" "$environment_file" > "$temporary_file" || true
-printf '%s=%s\n' "$environment_key" "$secret_value" >> "$temporary_file"
+printf "%s='%s'\n" "$environment_key" "$secret_value" >> "$temporary_file"
 chmod 600 "$temporary_file"
 mv "$temporary_file" "$environment_file"
 trap - EXIT HUP INT TERM

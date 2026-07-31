@@ -2,7 +2,18 @@
 
 ## Ambientes
 
-- **Sandbox:** pode criar cobranças de teste após aprovação e confirmação.
+- **Sandbox:** pode criar cobranças de teste após aprovação e confirmação. O
+  boleto gerado é íntegro e traz marca d'água "Boleto para Teste"; é ele que
+  valida valor, vencimento, empresa e descrição antes da emissão real.
+- **O Sandbox não entrega e-mail de notificação.** Duas cobranças criadas em
+  momentos diferentes não produziram nenhuma mensagem, com a caixa comprovada
+  recebendo outros remetentes. A configuração está correta dos dois lados —
+  cliente com e-mail, `notificationDisabled: false`, `PAYMENT_CREATED` com
+  `enabled` e `emailEnabledForCustomer`, conta `APPROVED` — e a documentação do
+  Asaas afirma que o envio funciona. Não reinvestigar: o comportamento da
+  notificação só pode ser verificado em Produção, onde as cobranças vêm sendo
+  pagas há meses. Não existe endpoint para reenviar notificação; isso é um botão
+  do painel.
 - **Produção:** a credencial independente pode habilitar consultas e vínculo
   de clientes por CNPJ, mas a criação de cobranças permanece bloqueada até
   autorização operacional explícita.

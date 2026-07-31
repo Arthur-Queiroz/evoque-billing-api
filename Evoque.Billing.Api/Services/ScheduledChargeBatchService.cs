@@ -21,17 +21,25 @@ public sealed class ScheduledChargeBatchService(
             cancellationToken)
             ?? throw new NotFoundException("A competência solicitada não foi encontrada.");
 
-        if (request.DueDate.Year != billingPeriodReference.Year || request.DueDate.Month != billingPeriodReference.Month)
+        CompanyBillingSchedule.ValidateClosingDay(request.ClosingDay);
+
+        // O vencimento não pertence à competência: um período que fecha em 25/06
+        // costuma vencer em 06/07. Ele só não pode ser anterior ao fechamento.
+        var closingDate = ResolveClosingDate(billingPeriodReference, request.ClosingDay);
+        if (request.DueDate < closingDate)
         {
-            throw new ValidationException("O vencimento do lote precisa pertencer à competência selecionada.");
+            throw new ValidationException(
+                $"O vencimento {request.DueDate:dd/MM/yyyy} é anterior ao fechamento "
+                + $"{closingDate:dd/MM/yyyy} da competência selecionada.");
         }
 
-        var scheduledCompanies = await companyBillingScheduleRepository.ListActiveByBillingDayAsync(
-            request.DueDate.Day,
+        var scheduledCompanies = await companyBillingScheduleRepository.ListActiveByClosingDayAsync(
+            request.ClosingDay,
             cancellationToken);
         if (scheduledCompanies.Count == 0)
         {
-            throw new ValidationException($"Não há empresas ativas configuradas para faturamento no dia {request.DueDate.Day:00}.");
+            throw new ValidationException(
+                $"Não há empresas ativas com fechamento no dia {request.ClosingDay:00}.");
         }
 
         var scheduledCompanyIds = await ExcludeInactiveCatalogCompaniesAsync(
@@ -40,7 +48,7 @@ public sealed class ScheduledChargeBatchService(
         if (scheduledCompanyIds.Count == 0)
         {
             throw new ValidationException(
-                $"As empresas agendadas para o dia {request.DueDate.Day:00} estão inativas no catálogo.");
+                $"As empresas com fechamento no dia {request.ClosingDay:00} estão inativas no catálogo.");
         }
 
         var billingDrafts = await billingDraftRepository.ListByBillingPeriodIdAsync(billingPeriod.Id, cancellationToken);
@@ -52,7 +60,7 @@ public sealed class ScheduledChargeBatchService(
         if (billingDraftIds.Length == 0)
         {
             throw new ValidationException(
-                $"Não há prévias aprovadas para as empresas agendadas no dia {request.DueDate.Day:00}.");
+                $"Não há prévias aprovadas para as empresas com fechamento no dia {request.ClosingDay:00}.");
         }
 
         return await chargeBatchService.CreatePreviewAsync(
@@ -62,6 +70,17 @@ public sealed class ScheduledChargeBatchService(
                 request.AsaasEnvironment,
                 billingDraftIds),
             cancellationToken);
+    }
+
+    /// <summary>
+    /// A competência identifica o ciclo pelo mês em que o período fecha. Um
+    /// fechamento no dia 25 da competência 06/2026 é 25/06/2026.
+    /// </summary>
+    private static DateOnly ResolveClosingDate(
+        BillingPeriodReference billingPeriodReference,
+        int closingDay)
+    {
+        return new DateOnly(billingPeriodReference.Year, billingPeriodReference.Month, closingDay);
     }
 
     /// <summary>

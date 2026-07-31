@@ -49,15 +49,28 @@ public sealed record CompanyCatalogImportWarningResponse(
     }
 }
 
-/// <summary>Resultado da sincronização confirmada pelo operador.</summary>
+/// <summary>
+/// Empresa encontrada na planilha do EVO que não existe no catálogo. Ela não é
+/// cadastrada: aparece aqui para alguém decidir se é cliente de verdade.
+/// </summary>
+public sealed record UnregisteredCompanyResponse(
+    string TaxId,
+    string FormattedTaxId,
+    string EvoName,
+    int MemberCount);
+
+/// <summary>
+/// Resultado do vínculo confirmado pelo operador. Nenhuma empresa é criada:
+/// <paramref name="LinkedCompanyCount"/> conta as que já estavam cadastradas e
+/// receberam colaboradores; <paramref name="UnregisteredCompanies"/> lista os
+/// CNPJs da planilha que ficaram de fora.
+/// </summary>
 public sealed record CompanyCatalogImportResponse(
     Guid ImportId,
     DateTimeOffset SynchronizedAt,
     string OperatorId,
-    int CreatedCompanyCount,
-    int IgnoredExistingCompanyCount,
-    int RegistryEnrichedCount,
-    int RegistryUnavailableCount,
+    int LinkedCompanyCount,
+    IReadOnlyCollection<UnregisteredCompanyResponse> UnregisteredCompanies,
     CorporateMemberComparisonResponse MemberComparison,
     CompanyCatalogImportPreviewResponse Preview);
 

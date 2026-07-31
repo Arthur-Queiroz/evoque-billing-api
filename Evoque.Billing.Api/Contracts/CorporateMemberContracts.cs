@@ -41,9 +41,16 @@ public sealed record CorporateMemberResponse(
     }
 }
 
+/// <summary>
+/// Resultado da comparação entre a exportação do EVO e a base de colaboradores.
+/// <paramref name="UnregisteredCompanyMemberCount"/> conta as pessoas cuja
+/// empresa não está no catálogo: elas não são importadas nem inativadas, ficam
+/// como pendência para alguém cadastrar a empresa ou corrigir o EVO.
+/// </summary>
 public sealed record CorporateMemberComparisonResponse(
     int NewMemberCount,
     int RetainedMemberCount,
     int DepartedMemberCount,
     int ReactivatedMemberCount,
-    int ConflictMemberCount);
+    int ConflictMemberCount,
+    int UnregisteredCompanyMemberCount);

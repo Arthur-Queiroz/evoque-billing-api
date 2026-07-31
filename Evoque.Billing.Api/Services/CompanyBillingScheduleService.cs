@@ -16,7 +16,7 @@ public sealed class CompanyBillingScheduleService(
         var updatedAt = DateTimeOffset.UtcNow;
         var companyBillingSchedule = CompanyBillingSchedule.Create(
             externalCompanyId,
-            request.BillingDay,
+            request.ClosingDay,
             request.IsActive,
             request.OperatorId,
             updatedAt);
@@ -28,7 +28,7 @@ public sealed class CompanyBillingScheduleService(
                 updatedAt,
                 null,
                 null,
-                $"Agenda da empresa {companyBillingSchedule.ExternalCompanyId} atualizada para dia {companyBillingSchedule.BillingDay:00}; ativa: {companyBillingSchedule.IsActive}."),
+                $"Agenda da empresa {companyBillingSchedule.ExternalCompanyId} atualizada para dia {companyBillingSchedule.ClosingDay:00}; ativa: {companyBillingSchedule.IsActive}."),
             cancellationToken);
 
         return CompanyBillingScheduleResponse.FromDomain(companyBillingSchedule);

@@ -8,7 +8,7 @@ public interface ICompanyBillingScheduleRepository
 
     Task<IReadOnlyCollection<CompanyBillingSchedule>> ListAsync(CancellationToken cancellationToken);
 
-    Task<IReadOnlyCollection<CompanyBillingSchedule>> ListActiveByBillingDayAsync(
-        int billingDay,
+    Task<IReadOnlyCollection<CompanyBillingSchedule>> ListActiveByClosingDayAsync(
+        int closingDay,
         CancellationToken cancellationToken);
 }

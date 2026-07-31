@@ -14,18 +14,18 @@ public sealed class InMemoryCompanyBillingScheduleRepository(InMemoryBillingData
     public Task<IReadOnlyCollection<CompanyBillingSchedule>> ListAsync(CancellationToken cancellationToken)
     {
         var schedules = dataStore.CompanyBillingSchedules.Values
-            .OrderBy(schedule => schedule.BillingDay)
+            .OrderBy(schedule => schedule.ClosingDay)
             .ThenBy(schedule => schedule.ExternalCompanyId)
             .ToArray();
         return Task.FromResult<IReadOnlyCollection<CompanyBillingSchedule>>(schedules);
     }
 
-    public Task<IReadOnlyCollection<CompanyBillingSchedule>> ListActiveByBillingDayAsync(
-        int billingDay,
+    public Task<IReadOnlyCollection<CompanyBillingSchedule>> ListActiveByClosingDayAsync(
+        int closingDay,
         CancellationToken cancellationToken)
     {
         var schedules = dataStore.CompanyBillingSchedules.Values
-            .Where(schedule => schedule.IsActive && schedule.BillingDay == billingDay)
+            .Where(schedule => schedule.IsActive && schedule.ClosingDay == closingDay)
             .OrderBy(schedule => schedule.ExternalCompanyId)
             .ToArray();
         return Task.FromResult<IReadOnlyCollection<CompanyBillingSchedule>>(schedules);

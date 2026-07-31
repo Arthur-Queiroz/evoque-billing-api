@@ -11,6 +11,7 @@ public sealed class DatabaseSchemaInitializer(MySqlConnectionFactory connectionF
     private const string CompanyBillingScheduleMigrationId = "005_add_company_billing_schedules";
     private const string CompanyCatalogMigrationId = "006_add_company_catalog";
     private const string CorporateMemberMigrationId = "007_add_corporate_member_crm";
+    private const string ClosingDayMigrationId = "008_rename_billing_day_to_closing_day";
 
     public async Task InitializeAsync(CancellationToken cancellationToken)
     {
@@ -188,6 +189,32 @@ public sealed class DatabaseSchemaInitializer(MySqlConnectionFactory connectionF
         await CreateCompanyBillingScheduleTableAsync(connection, cancellationToken);
         await CreateCompanyCatalogTablesAsync(connection, cancellationToken);
         await CreateCorporateMemberTablesAsync(connection, cancellationToken);
+        await RenameBillingDayToClosingDayAsync(connection, cancellationToken);
+    }
+
+    /// <summary>
+    /// O dia guardado nesta coluna sempre foi o fechamento do período de serviço
+    /// (02, 18, 20 ou 25), nunca o vencimento do boleto — que no Asaas cai em
+    /// outros dias e normalmente no mês seguinte. O nome antigo levou o lote
+    /// agendado a filtrar empresas pelo dia do vencimento e a não achar nenhuma.
+    /// O valor não muda; só o nome passa a dizer o que o dado é.
+    /// </summary>
+    private static async Task RenameBillingDayToClosingDayAsync(
+        MySqlConnection connection,
+        CancellationToken cancellationToken)
+    {
+        if (await IsAppliedAsync(connection, ClosingDayMigrationId, cancellationToken))
+        {
+            return;
+        }
+
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        await ExecuteAsync(connection, """
+            ALTER TABLE company_billing_schedules
+                RENAME COLUMN billing_day TO closing_day;
+            """, transaction, cancellationToken);
+        await InsertMigrationAsync(connection, transaction, ClosingDayMigrationId, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
     }
 
     private static async Task CreateCorporateMemberTablesAsync(

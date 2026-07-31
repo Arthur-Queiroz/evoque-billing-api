@@ -10,11 +10,11 @@ public sealed class MySqlCompanyBillingScheduleRepository(MySqlConnectionFactory
     {
         const string commandText = """
             INSERT INTO company_billing_schedules
-                (external_company_id, billing_day, is_active, updated_by, updated_at)
+                (external_company_id, closing_day, is_active, updated_by, updated_at)
             VALUES
-                (@externalCompanyId, @billingDay, @isActive, @updatedBy, @updatedAt)
+                (@externalCompanyId, @closingDay, @isActive, @updatedBy, @updatedAt)
             ON DUPLICATE KEY UPDATE
-                billing_day = VALUES(billing_day),
+                closing_day = VALUES(closing_day),
                 is_active = VALUES(is_active),
                 updated_by = VALUES(updated_by),
                 updated_at = VALUES(updated_at);
@@ -32,32 +32,32 @@ public sealed class MySqlCompanyBillingScheduleRepository(MySqlConnectionFactory
         return ListByConditionAsync("", null, cancellationToken);
     }
 
-    public Task<IReadOnlyCollection<CompanyBillingSchedule>> ListActiveByBillingDayAsync(
-        int billingDay,
+    public Task<IReadOnlyCollection<CompanyBillingSchedule>> ListActiveByClosingDayAsync(
+        int closingDay,
         CancellationToken cancellationToken)
     {
-        return ListByConditionAsync("WHERE is_active = 1 AND billing_day = @billingDay", billingDay, cancellationToken);
+        return ListByConditionAsync("WHERE is_active = 1 AND closing_day = @closingDay", closingDay, cancellationToken);
     }
 
     private async Task<IReadOnlyCollection<CompanyBillingSchedule>> ListByConditionAsync(
         string whereClause,
-        int? billingDay,
+        int? closingDay,
         CancellationToken cancellationToken)
     {
         var commandText = $"""
-            SELECT external_company_id, billing_day, is_active, updated_by, updated_at
+            SELECT external_company_id, closing_day, is_active, updated_by, updated_at
             FROM company_billing_schedules
             {whereClause}
-            ORDER BY billing_day, external_company_id;
+            ORDER BY closing_day, external_company_id;
             """;
 
         var schedules = new List<CompanyBillingSchedule>();
         await using var connection = connectionFactory.CreateConnection();
         await connection.OpenAsync(cancellationToken);
         await using var command = new MySqlCommand(commandText, connection);
-        if (billingDay is not null)
+        if (closingDay is not null)
         {
-            command.Parameters.AddWithValue("@billingDay", billingDay.Value);
+            command.Parameters.AddWithValue("@closingDay", closingDay.Value);
         }
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
@@ -65,7 +65,7 @@ public sealed class MySqlCompanyBillingScheduleRepository(MySqlConnectionFactory
         {
             schedules.Add(new CompanyBillingSchedule(
                 reader.GetString("external_company_id"),
-                reader.GetInt32("billing_day"),
+                reader.GetInt32("closing_day"),
                 reader.GetBoolean("is_active"),
                 reader.GetString("updated_by"),
                 new DateTimeOffset(DateTime.SpecifyKind(reader.GetDateTime("updated_at"), DateTimeKind.Utc))));
@@ -77,7 +77,7 @@ public sealed class MySqlCompanyBillingScheduleRepository(MySqlConnectionFactory
     private static void AddParameters(MySqlCommand command, CompanyBillingSchedule companyBillingSchedule)
     {
         command.Parameters.AddWithValue("@externalCompanyId", companyBillingSchedule.ExternalCompanyId);
-        command.Parameters.AddWithValue("@billingDay", companyBillingSchedule.BillingDay);
+        command.Parameters.AddWithValue("@closingDay", companyBillingSchedule.ClosingDay);
         command.Parameters.AddWithValue("@isActive", companyBillingSchedule.IsActive);
         command.Parameters.AddWithValue("@updatedBy", companyBillingSchedule.UpdatedBy);
         command.Parameters.AddWithValue("@updatedAt", companyBillingSchedule.UpdatedAt.UtcDateTime);

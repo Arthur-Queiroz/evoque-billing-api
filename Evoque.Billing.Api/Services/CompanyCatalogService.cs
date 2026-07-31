@@ -51,7 +51,7 @@ public sealed class CompanyCatalogService(
         CancellationToken cancellationToken)
     {
         var normalizedTaxId = CompanyTaxId.Normalize(request.TaxId);
-        ValidateOptionalBillingDay(request.BillingDay);
+        ValidateOptionalClosingDay(request.ClosingDay);
         var existingCompany = await companyRepository.FindByTaxIdAsync(normalizedTaxId, cancellationToken);
         if (existingCompany is not null)
         {
@@ -70,7 +70,7 @@ public sealed class CompanyCatalogService(
             request.OperatorId,
             createdAt);
         await companyRepository.UpsertAsync(company, cancellationToken);
-        await ApplyBillingDayAsync(company, request.BillingDay, request.OperatorId, cancellationToken);
+        await ApplyClosingDayAsync(company, request.ClosingDay, request.OperatorId, cancellationToken);
 
         // O CNPJ é suficiente para o cadastro. Quando o operador não informa
         // um nome, o cadastro público fornece o nome fantasia ou a razão social.
@@ -102,14 +102,14 @@ public sealed class CompanyCatalogService(
         CancellationToken cancellationToken)
     {
         var company = await RequireCompanyAsync(taxId, cancellationToken);
-        ValidateOptionalBillingDay(request.BillingDay);
+        ValidateOptionalClosingDay(request.ClosingDay);
         var updatedAt = DateTimeOffset.UtcNow;
         company.UpdateManualData(
             request.DisplayName,
             request.OperatorId,
             updatedAt);
         await companyRepository.UpsertAsync(company, cancellationToken);
-        await ApplyBillingDayAsync(company, request.BillingDay, request.OperatorId, cancellationToken);
+        await ApplyClosingDayAsync(company, request.ClosingDay, request.OperatorId, cancellationToken);
         await RegisterAuditAsync(
             "company.updated",
             request.OperatorId,
@@ -202,12 +202,12 @@ public sealed class CompanyCatalogService(
     /// Empresas ativas do catálogo com agenda ativa no dia informado. É a lista
     /// que a tela de faturamento por dia e o lote agendado devem usar.
     /// </summary>
-    public async Task<IReadOnlyCollection<CompanyResponse>> ListActiveByBillingDayAsync(
-        int billingDay,
+    public async Task<IReadOnlyCollection<CompanyResponse>> ListActiveByClosingDayAsync(
+        int closingDay,
         CancellationToken cancellationToken)
     {
-        var schedules = await companyBillingScheduleRepository.ListActiveByBillingDayAsync(
-            billingDay,
+        var schedules = await companyBillingScheduleRepository.ListActiveByClosingDayAsync(
+            closingDay,
             cancellationToken);
         var latestImportId = await ReadLatestImportIdAsync(cancellationToken);
         var memberCountsByCompany = await ReadActiveMemberCountsByCompanyAsync(cancellationToken);
@@ -261,12 +261,12 @@ public sealed class CompanyCatalogService(
             }
         }
 
-        if (query.BillingDay is not null && company.BillingDay != query.BillingDay)
+        if (query.ClosingDay is not null && company.ClosingDay != query.ClosingDay)
         {
             return false;
         }
 
-        if (query.WithoutBillingDay == true && company.BillingDay is not null)
+        if (query.WithoutClosingDay == true && company.ClosingDay is not null)
         {
             return false;
         }
@@ -377,18 +377,18 @@ public sealed class CompanyCatalogService(
     /// Um dia informado liga a agenda no CNPJ da empresa. Um dia ausente desliga
     /// a agenda existente, que é o significado operacional de "empresa sem dia".
     /// </summary>
-    private async Task ApplyBillingDayAsync(
+    private async Task ApplyClosingDayAsync(
         Company company,
-        int? billingDay,
+        int? closingDay,
         string operatorId,
         CancellationToken cancellationToken)
     {
-        if (billingDay is not null)
+        if (closingDay is not null)
         {
             await companyBillingScheduleRepository.UpsertAsync(
                 CompanyBillingSchedule.Create(
                     company.TaxId,
-                    billingDay.Value,
+                    closingDay.Value,
                     isActive: true,
                     operatorId,
                     DateTimeOffset.UtcNow),
@@ -399,11 +399,11 @@ public sealed class CompanyCatalogService(
         await DeactivateScheduleAsync(company, operatorId, cancellationToken);
     }
 
-    private static void ValidateOptionalBillingDay(int? billingDay)
+    private static void ValidateOptionalClosingDay(int? closingDay)
     {
-        if (billingDay is not null)
+        if (closingDay is not null)
         {
-            CompanyBillingSchedule.ValidateBillingDay(billingDay.Value);
+            CompanyBillingSchedule.ValidateClosingDay(closingDay.Value);
         }
     }
 
@@ -422,7 +422,7 @@ public sealed class CompanyCatalogService(
         await companyBillingScheduleRepository.UpsertAsync(
             CompanyBillingSchedule.Create(
                 company.TaxId,
-                existingSchedule.BillingDay,
+                existingSchedule.ClosingDay,
                 isActive: false,
                 operatorId,
                 DateTimeOffset.UtcNow),

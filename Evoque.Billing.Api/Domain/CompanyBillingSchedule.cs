@@ -1,17 +1,27 @@
 namespace Evoque.Billing.Api.Domain;
 
+/// <summary>
+/// Agenda de faturamento da empresa.
+///
+/// <see cref="ClosingDay"/> é o dia em que o período de serviço fecha, não o dia
+/// do vencimento. O histórico real do Asaas mostra períodos como
+/// "do dia 26/05 ao dia 25/06" com boleto vencendo em 06/07: o fechamento é o
+/// dia 25, o vencimento é negociado à parte e cai em outro dia, geralmente no
+/// mês seguinte. Tratar os dois como o mesmo número fazia o lote agendado nunca
+/// encontrar empresa nenhuma.
+/// </summary>
 public sealed record CompanyBillingSchedule(
     string ExternalCompanyId,
-    int BillingDay,
+    int ClosingDay,
     bool IsActive,
     string UpdatedBy,
     DateTimeOffset UpdatedAt)
 {
-    private static readonly int[] SupportedBillingDays = [2, 18, 20, 25];
+    private static readonly int[] SupportedClosingDays = [2, 18, 20, 25];
 
     public static CompanyBillingSchedule Create(
         string externalCompanyId,
-        int billingDay,
+        int closingDay,
         bool isActive,
         string updatedBy,
         DateTimeOffset updatedAt)
@@ -21,21 +31,21 @@ public sealed record CompanyBillingSchedule(
             throw new ValidationException("O identificador externo da empresa é obrigatório.");
         }
 
-        ValidateBillingDay(billingDay);
+        ValidateClosingDay(closingDay);
 
         if (string.IsNullOrWhiteSpace(updatedBy))
         {
             throw new ValidationException("O responsável pela atualização da agenda é obrigatório.");
         }
 
-        return new CompanyBillingSchedule(externalCompanyId.Trim(), billingDay, isActive, updatedBy.Trim(), updatedAt);
+        return new CompanyBillingSchedule(externalCompanyId.Trim(), closingDay, isActive, updatedBy.Trim(), updatedAt);
     }
 
-    public static void ValidateBillingDay(int billingDay)
+    public static void ValidateClosingDay(int closingDay)
     {
-        if (!SupportedBillingDays.Contains(billingDay))
+        if (!SupportedClosingDays.Contains(closingDay))
         {
-            throw new ValidationException("O dia de faturamento deve ser 02, 18, 20 ou 25.");
+            throw new ValidationException("O dia de fechamento deve ser 02, 18, 20 ou 25.");
         }
     }
 }

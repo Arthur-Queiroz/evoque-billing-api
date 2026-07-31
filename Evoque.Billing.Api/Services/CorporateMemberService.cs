@@ -36,7 +36,20 @@ public sealed class CorporateMemberService(
         CancellationToken cancellationToken)
     {
         var existingMembers = await corporateMemberRepository.ListAsync(cancellationToken);
-        return Compare(importedCatalog, existingMembers).Response;
+        var registeredCompanyTaxIds = await ListRegisteredCompanyTaxIdsAsync(cancellationToken);
+        return Compare(importedCatalog, existingMembers, registeredCompanyTaxIds).Response;
+    }
+
+    /// <summary>
+    /// O catálogo é a fonte da verdade das empresas pagadoras. A planilha do EVO
+    /// só pode vincular pessoas a empresas já cadastradas.
+    /// </summary>
+    private async Task<HashSet<string>> ListRegisteredCompanyTaxIdsAsync(CancellationToken cancellationToken)
+    {
+        var companies = await companyRepository.ListAsync(cancellationToken);
+        return companies
+            .Select(company => company.TaxId)
+            .ToHashSet(StringComparer.Ordinal);
     }
 
     public async Task<CorporateMemberComparisonResponse> ApplyCompleteSnapshotAsync(
@@ -54,7 +67,8 @@ public sealed class CorporateMemberService(
         }
 
         var existingMembers = await corporateMemberRepository.ListAsync(cancellationToken);
-        var comparison = Compare(importedCatalog, existingMembers);
+        var registeredCompanyTaxIds = await ListRegisteredCompanyTaxIdsAsync(cancellationToken);
+        var comparison = Compare(importedCatalog, existingMembers, registeredCompanyTaxIds);
         var existingMembersById = existingMembers.ToDictionary(member => member.EvoMemberId);
         var membersToPersist = new List<CorporateMember>();
 
@@ -102,7 +116,8 @@ public sealed class CorporateMemberService(
 
     private static CorporateMemberComparison Compare(
         ImportedCompanyCatalog importedCatalog,
-        IReadOnlyCollection<CorporateMember> existingMembers)
+        IReadOnlyCollection<CorporateMember> existingMembers,
+        IReadOnlySet<string> registeredCompanyTaxIds)
     {
         var existingMembersById = existingMembers.ToDictionary(member => member.EvoMemberId);
         var allObservations = importedCatalog.Companies
@@ -118,6 +133,7 @@ public sealed class CorporateMemberService(
         var retainedMemberCount = 0;
         var reactivatedMemberCount = 0;
         var conflictMemberCount = 0;
+        var unregisteredCompanyMemberCount = 0;
 
         foreach (var observationsByMember in allObservations.GroupBy(
                      observation => observation.Member.EvoMemberId))
@@ -133,6 +149,16 @@ public sealed class CorporateMemberService(
             }
 
             var observation = observationsByMember.First();
+
+            // A coluna Profissão do EVO traz o empregador da pessoa, que quase
+            // nunca é a empresa pagadora. Sem esta checagem, sindicatos, igrejas
+            // e planos internos viravam empresas do catálogo.
+            if (!registeredCompanyTaxIds.Contains(observation.CompanyTaxId))
+            {
+                unregisteredCompanyMemberCount++;
+                continue;
+            }
+
             if (existingMembersById.TryGetValue(
                     observation.Member.EvoMemberId,
                     out var existingMember)
@@ -170,7 +196,8 @@ public sealed class CorporateMemberService(
                 retainedMemberCount,
                 departedMemberIds.Length,
                 reactivatedMemberCount,
-                conflictMemberCount),
+                conflictMemberCount,
+                unregisteredCompanyMemberCount),
             validObservations,
             departedMemberIds);
     }

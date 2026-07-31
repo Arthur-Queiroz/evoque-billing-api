@@ -327,6 +327,74 @@ public sealed class BillingWorkflowTests
         Assert.False(asaasChargeGateway.WasCalled);
     }
 
+    /// <summary>
+    /// Regressão do motivo pelo qual o lote agendado nunca achava empresa: ele
+    /// filtrava pelo dia do vencimento. Nenhum vencimento real cai em 02, 18, 20
+    /// ou 25 — eles caem em 06, 10, 12, 27, 30 — então o filtro voltava vazio.
+    /// Aqui o vencimento cai no dia 02 e a empresa selecionada é a do
+    /// fechamento 20, não a do fechamento 02.
+    /// </summary>
+    [Fact]
+    public async Task ScheduledPreviewAsync_SelectsByClosingDayNotByTheDueDateDay()
+    {
+        var services = CreateServices();
+        var billingPeriodReference = new BillingPeriodReference(2026, 8);
+
+        await services.BillingPeriodService.CreateAsync(billingPeriodReference, "maria", CancellationToken.None);
+        var closingDayTwentyDraft = await services.BillingDraftService.CreateAsync(
+            billingPeriodReference,
+            CreateDraftCommand("empresa-fechamento-20", "Empresa Fechamento 20"),
+            "maria",
+            CancellationToken.None);
+        var closingDayTwoDraft = await services.BillingDraftService.CreateAsync(
+            billingPeriodReference,
+            CreateDraftCommand("empresa-fechamento-02", "Empresa Fechamento 02"),
+            "maria",
+            CancellationToken.None);
+        await services.BillingDraftService.ApproveAsync(closingDayTwentyDraft.Id, "maria", CancellationToken.None);
+        await services.BillingDraftService.ApproveAsync(closingDayTwoDraft.Id, "maria", CancellationToken.None);
+        await services.CompanyBillingScheduleService.UpsertAsync(
+            "empresa-fechamento-20",
+            new UpsertCompanyBillingScheduleRequest(20, true, "maria"),
+            CancellationToken.None);
+        await services.CompanyBillingScheduleService.UpsertAsync(
+            "empresa-fechamento-02",
+            new UpsertCompanyBillingScheduleRequest(2, true, "maria"),
+            CancellationToken.None);
+
+        var preview = await services.ScheduledChargeBatchService.CreatePreviewAsync(
+            billingPeriodReference,
+            new CreateScheduledChargeBatchPreviewRequest(
+                "maria",
+                20,
+                new DateOnly(2026, 9, 2),
+                "Sandbox"),
+            CancellationToken.None);
+
+        Assert.Equal(closingDayTwentyDraft.Id, Assert.Single(preview.Items).BillingDraftId);
+    }
+
+    [Fact]
+    public async Task ScheduledPreviewAsync_RejectsADueDateBeforeThePeriodCloses()
+    {
+        var services = CreateServices();
+        var billingPeriodReference = new BillingPeriodReference(2026, 8);
+
+        await services.BillingPeriodService.CreateAsync(billingPeriodReference, "maria", CancellationToken.None);
+
+        var exception = await Assert.ThrowsAsync<ValidationException>(() =>
+            services.ScheduledChargeBatchService.CreatePreviewAsync(
+                billingPeriodReference,
+                new CreateScheduledChargeBatchPreviewRequest(
+                    "maria",
+                    25,
+                    new DateOnly(2026, 8, 10),
+                    "Sandbox"),
+                CancellationToken.None));
+
+        Assert.Contains("anterior ao fechamento", exception.Message);
+    }
+
     [Fact]
     public async Task ScheduledPreviewAsync_UsesOnlyApprovedDraftsForCompaniesScheduledOnTheDueDay()
     {
@@ -356,11 +424,14 @@ public sealed class BillingWorkflowTests
             new UpsertCompanyBillingScheduleRequest(2, true, "maria"),
             CancellationToken.None);
 
+        // Fechamento no dia 20 de agosto, vencimento em 5 de setembro: é assim
+        // que as cobranças reais aparecem no Asaas.
         var preview = await services.ScheduledChargeBatchService.CreatePreviewAsync(
             billingPeriodReference,
             new CreateScheduledChargeBatchPreviewRequest(
                 "maria",
-                new DateOnly(2026, 8, 20),
+                20,
+                new DateOnly(2026, 9, 5),
                 "Sandbox"),
             CancellationToken.None);
 
@@ -402,7 +473,8 @@ public sealed class BillingWorkflowTests
                 billingPeriodReference,
                 new CreateScheduledChargeBatchPreviewRequest(
                     "maria",
-                    new DateOnly(2026, 8, 20),
+                    20,
+                    new DateOnly(2026, 9, 5),
                     "Sandbox"),
                 CancellationToken.None));
     }

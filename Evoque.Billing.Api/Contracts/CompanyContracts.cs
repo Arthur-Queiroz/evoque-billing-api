@@ -6,8 +6,8 @@ namespace Evoque.Billing.Api.Contracts;
 public sealed record ListCompaniesQuery(
     string? Search = null,
     string? Status = null,
-    int? BillingDay = null,
-    bool? WithoutBillingDay = null,
+    int? ClosingDay = null,
+    bool? WithoutClosingDay = null,
     string? Source = null,
     bool? SeenInLastImport = null,
     string? AsaasLink = null);
@@ -15,12 +15,12 @@ public sealed record ListCompaniesQuery(
 public sealed record CreateCompanyRequest(
     string TaxId,
     string? DisplayName,
-    int? BillingDay,
+    int? ClosingDay,
     string OperatorId);
 
 public sealed record UpdateCompanyRequest(
     string DisplayName,
-    int? BillingDay,
+    int? ClosingDay,
     string OperatorId);
 
 /// <summary>Corpo das ações que só precisam saber quem é o responsável.</summary>
@@ -63,8 +63,9 @@ public sealed record CompanyRegistryAddressResponse(
 }
 
 /// <summary>
-/// Empresa do catálogo reunida com a agenda atual. `BillingDay` é nulo enquanto
-/// nenhum dia foi configurado.
+/// Empresa do catálogo reunida com a agenda atual. `ClosingDay` é o dia em que
+/// o período de serviço fecha — 02, 18, 20 ou 25 — e não o vencimento do boleto,
+/// que é definido por lote. É nulo enquanto nenhum dia foi configurado.
 /// </summary>
 public sealed record CompanyResponse(
     string TaxId,
@@ -84,7 +85,7 @@ public sealed record CompanyResponse(
     DateTimeOffset? LastSeenAt,
     bool SeenInLastImport,
     bool RequiresReviewAfterReappearing,
-    int? BillingDay,
+    int? ClosingDay,
     bool HasActiveSchedule,
     string? AsaasSandboxCustomerId,
     string? AsaasProductionCustomerId,
@@ -115,7 +116,7 @@ public sealed record CompanyResponse(
             company.LastSeenAt,
             company.WasSeenInImport(latestImportId),
             company.RequiresReviewAfterReappearing,
-            companyBillingSchedule?.BillingDay,
+            companyBillingSchedule?.ClosingDay,
             companyBillingSchedule?.IsActive ?? false,
             company.AsaasSandboxCustomerId,
             company.AsaasProductionCustomerId,

@@ -6,20 +6,23 @@ using Evoque.Billing.Api.Repositories;
 namespace Evoque.Billing.Api.Services;
 
 /// <summary>
-/// Adiciona ao catálogo empresas ainda inexistentes encontradas na exportação
-/// completa do CRM 2.0 do EVO.
+/// Vincula colaboradores da exportação completa do CRM 2.0 do EVO às empresas
+/// já cadastradas no catálogo.
 ///
-/// O fluxo é: upload → preview → confirmação do operador → insert por CNPJ →
-/// enriquecimento cadastral tolerante a falhas. Nenhuma etapa cria prévia
-/// financeira nem chama o Asaas. Empresas já cadastradas são ignoradas sem
-/// qualquer atualização.
+/// Esta importação <b>não cria empresa</b>. A coluna Profissão do EVO contém o
+/// empregador da pessoa, não a empresa que paga: tratá-la como empresa pagadora
+/// cadastrou sindicatos, igrejas e planos internos como se fossem clientes. O
+/// catálogo é mantido à mão e um CNPJ desconhecido vira pendência, nunca um
+/// cadastro novo.
+///
+/// O fluxo é: upload → preview → confirmação do operador → vínculo dos
+/// colaboradores. Nenhuma etapa cria prévia financeira nem chama o Asaas.
 /// </summary>
 public sealed class CompanyCatalogImportService(
     CompanyCatalogSpreadsheetReader companyCatalogSpreadsheetReader,
     ICompanyRepository companyRepository,
     ICompanyCatalogImportRepository companyCatalogImportRepository,
-    CorporateMemberService corporateMemberService,
-    CompanyRegistryEnrichmentService companyRegistryEnrichmentService)
+    CorporateMemberService corporateMemberService)
 {
     private const long MaximumSpreadsheetSize = 25 * 1024 * 1024;
 
@@ -75,25 +78,17 @@ public sealed class CompanyCatalogImportService(
                 + "com divergência de empresa. Nenhum vínculo foi alterado.");
         }
 
-        var createdCompanies = new List<Company>();
-        var ignoredExistingCompanyCount = 0;
-        foreach (var discoveredCompany in importedCatalog.Companies)
-        {
-            if (existingTaxIds.Contains(discoveredCompany.TaxId))
-            {
-                ignoredExistingCompanyCount++;
-                continue;
-            }
-
-            var newCompany = Company.CreateFromEvoSpreadsheet(
+        var registeredCompanyCount = importedCatalog.Companies
+            .Count(discoveredCompany => existingTaxIds.Contains(discoveredCompany.TaxId));
+        var unregisteredCompanies = importedCatalog.Companies
+            .Where(discoveredCompany => !existingTaxIds.Contains(discoveredCompany.TaxId))
+            .OrderByDescending(discoveredCompany => discoveredCompany.Members.Count)
+            .Select(discoveredCompany => new UnregisteredCompanyResponse(
                 discoveredCompany.TaxId,
+                CompanyTaxId.Format(discoveredCompany.TaxId),
                 discoveredCompany.EvoName,
-                discoveredCompany.Members.Count,
-                importId,
-                operatorId,
-                synchronizedAt);
-            createdCompanies.Add(newCompany);
-        }
+                discoveredCompany.Members.Count))
+            .ToArray();
 
         var importedMembers = importedCatalog.Companies
             .SelectMany(company => company.Members.Select(member => new CompanyCatalogImportMember(
@@ -112,23 +107,24 @@ public sealed class CompanyCatalogImportService(
             synchronizedAt,
             importedCatalog.AnalyzedRowCount,
             importedCatalog.Companies.Count,
-            createdCompanies.Count,
+            createdCompanyCount: 0,
             updatedCompanyCount: 0,
             unseenCompanyCount: 0,
             importedCatalog.Warnings.Count);
         var auditLog = AuditLog.Create(
-            "company-catalog.bulk-added",
+            "company-catalog.members-linked",
             operatorId,
             synchronizedAt,
             null,
             null,
-            $"Inclusão em lote {importId}: {importedCatalog.Companies.Count} empresas encontradas, "
-            + $"{createdCompanies.Count} criadas, {ignoredExistingCompanyCount} já cadastradas e ignoradas, "
-            + $"{importedCatalog.Warnings.Count} avisos.");
+            $"Vínculo de colaboradores {importId}: {importedCatalog.Companies.Count} empresas na planilha, "
+            + $"{registeredCompanyCount} cadastradas e vinculadas, "
+            + $"{unregisteredCompanies.Length} fora do catálogo e ignoradas, "
+            + $"{importedCatalog.Warnings.Count} avisos. Nenhuma empresa foi criada.");
         await companyCatalogImportRepository.AddAsync(
             companyCatalogImport,
             importedMembers,
-            createdCompanies,
+            Array.Empty<Company>(),
             auditLog,
             cancellationToken);
 
@@ -140,20 +136,12 @@ public sealed class CompanyCatalogImportService(
             completeSnapshotConfirmed,
             cancellationToken);
 
-        // Só as empresas novas são consultadas automaticamente. As já existentes
-        // mantêm o cadastro persistido até alguém pedir atualização explícita.
-        var enrichmentSummary = await companyRegistryEnrichmentService.RefreshManyAsync(
-            createdCompanies,
-            cancellationToken);
-
         return new CompanyCatalogImportResponse(
             importId,
             synchronizedAt,
             companyCatalogImport.OperatorId,
-            createdCompanies.Count,
-            ignoredExistingCompanyCount,
-            enrichmentSummary.EnrichedCount,
-            enrichmentSummary.UnavailableCount,
+            registeredCompanyCount,
+            unregisteredCompanies,
             memberComparison,
             CreatePreviewResponse(importedCatalog, existingTaxIds, memberComparison));
     }

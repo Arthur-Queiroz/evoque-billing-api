@@ -25,7 +25,7 @@ public sealed class CompaniesController(
         return Ok(companies);
     }
 
-    [HttpGet("{taxId}")]
+    [HttpGet("{taxId}", Name = "GetCompany")]
     [ProducesResponseType<CompanyResponse>(StatusCodes.Status200OK)]
     public async Task<ActionResult<CompanyResponse>> GetAsync(
         string taxId,
@@ -42,7 +42,13 @@ public sealed class CompaniesController(
         CancellationToken cancellationToken)
     {
         var company = await companyCatalogService.CreateAsync(request, cancellationToken);
-        return CreatedAtAction(nameof(GetAsync), new { taxId = company.TaxId }, company);
+
+        // Rota nomeada, como nos demais controllers. CreatedAtAction(nameof(GetAsync))
+        // não funciona: o ASP.NET remove o sufixo "Async" do nome da action, então
+        // procurava uma rota "GetAsync" inexistente e falhava ao montar a resposta —
+        // depois de a empresa já ter sido gravada. O cadastro devolvia 500 com corpo
+        // vazio e a empresa aparecia no catálogo mesmo assim.
+        return CreatedAtRoute("GetCompany", new { taxId = company.TaxId }, company);
     }
 
     [HttpPut("{taxId}")]

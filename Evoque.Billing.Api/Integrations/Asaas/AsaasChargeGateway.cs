@@ -31,8 +31,9 @@ public sealed class AsaasChargeGateway(
         using var response = await httpClient.PostAsJsonAsync("payments", requestBody, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
+            var refusalReason = await AsaasErrorMessage.ReadAsync(response, cancellationToken);
             throw new ExternalOperationNotAllowedException(
-                $"O Asaas recusou a criação da cobrança com HTTP {(int)response.StatusCode}.");
+                $"O Asaas recusou a criação da cobrança: {refusalReason}");
         }
 
         var responseData = await response.Content.ReadFromJsonAsync<AsaasPaymentResponse>(cancellationToken: cancellationToken);

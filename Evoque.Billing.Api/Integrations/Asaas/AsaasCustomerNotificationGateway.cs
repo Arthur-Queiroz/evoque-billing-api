@@ -45,8 +45,10 @@ public sealed class AsaasCustomerNotificationGateway(
         using var response = await httpClient.GetAsync(path, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
+            var failureReason = await AsaasErrorMessage.ReadAsync(response, cancellationToken);
             throw new ExternalOperationNotAllowedException(
-                "Não foi possível consultar o cadastro ou as notificações do cliente no Asaas.");
+                "Não foi possível consultar o cadastro ou as notificações do cliente no Asaas: "
+                + failureReason);
         }
 
         return await response.Content.ReadFromJsonAsync<T>(cancellationToken: cancellationToken)

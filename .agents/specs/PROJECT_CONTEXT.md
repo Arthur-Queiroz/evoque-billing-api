@@ -13,9 +13,11 @@ contratos e matrículas continuam sendo lidos da API do Evo.
   cadastra e mantém empresas pelo CNPJ; a BrasilAPI preenche os dados públicos
   disponíveis.
 - **Planilha completa do CRM 2.0 do Evo:** fonte do snapshot de colaboradores
-  corporativos e ferramenta de inclusão de empresas. Descobre
-  `IdCliente + nome + contratos + empresa/CNPJ`; cadastra somente CNPJs
-  inexistentes e nunca altera os dados operacionais de empresas já cadastradas.
+  corporativos. Descobre `IdCliente + nome + contratos + empresa/CNPJ` e vincula
+  a pessoa a uma empresa **já cadastrada**. Ela nunca cria empresa: a coluna
+  `Profissão` traz o empregador do aluno, não quem paga, e tratá-la como empresa
+  pagadora cadastrou sindicatos, igrejas, GM, SEBRAE e planos internos como se
+  fossem clientes. Um CNPJ desconhecido vira pendência para conferência humana.
 - **Planilha de fechamento validada:** fonte auditável da prévia financeira
   enquanto a API pública não reproduzir o relatório interno.
 - **BrasilAPI:** enriquecimento e validação cadastral de um CNPJ já conhecido.
@@ -76,9 +78,18 @@ O fluxo de prévia, aprovação, confirmação e lote está implementado. A emis
 de teste é permitida apenas no Asaas Sandbox.
 
 O catálogo interno de empresas está implementado e persiste independentemente
-das planilhas. As 63 empresas iniciais foram descobertas na exportação real do
-CRM 2.0, a partir de 572 linhas analisadas. Novas empresas passam a ser
-cadastradas individualmente; a planilha permanece apenas como inclusão em lote.
+das planilhas. Ele contém **39 empresas ativas**, que são exatamente os clientes
+existentes no Asaas de produção — a fonte da verdade sobre quem é cliente
+corporativo. Empresas novas são cadastradas individualmente pelo CNPJ.
+
+As 63 empresas que existiam antes vinham da coluna `Profissão` da exportação do
+EVO e em sua maioria não eram clientes: sindicatos, igrejas, GM, SEBRAE e os
+planos internos "AMIGOS EVOQUE". Foram inativadas, não excluídas. Confrontar o
+catálogo com `GET /v3/customers` do Asaas é o jeito de validar essa lista.
+
+Cinco empresas ativas estão sem dia de fechamento (A L Alumínio, New Pharmacos,
+Geserv, Gemon e Efatha) porque as cobranças delas no Asaas não declaram período
+de serviço. Enquanto estiverem assim, não entram em lote agendado.
 
 Os colaboradores corporativos também formam uma base persistente. A
 exportação completa compara o estado atual com a base: adiciona novos, mantém

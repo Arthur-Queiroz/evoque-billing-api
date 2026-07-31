@@ -18,17 +18,23 @@ O catálogo descobre empresas; o fechamento calcula valores. Eles compartilham
 apenas o parsing estrutural do XLSX, em `SpreadsheetWorkbookReader`.
 
 ```text
-Inclusão em lote no catálogo         Prévia de faturamento
+Vínculo de colaboradores             Prévia de faturamento
 CompanyCatalogSpreadsheetReader      BillingSpreadsheetReader
 → exige empresa com CNPJ válido      → exige empresa, pessoa e valor > 0
 → aceita valor vazio/zero/inválido   → recusa a linha sem valor positivo
 → agrupa IdCliente e contratos/CNPJ  → agrupa itens por CNPJ
-→ insere apenas CNPJs inexistentes    → BillingDraft pendente de revisão
-→ ignora empresas já cadastradas
-→ compara snapshot de colaboradores
-→ enriquecimento cadastral           → aprovação humana
+→ NUNCA cria empresa                 → BillingDraft pendente de revisão
+→ vincula só a empresa cadastrada
+→ CNPJ desconhecido vira pendência
+→ compara snapshot de colaboradores  → aprovação humana
                                      → lote Asaas Sandbox
 ```
+
+A separação entre valor positivo e valor vazio existe porque as duas planilhas
+descrevem populações opostas. Na exportação real, as 181 linhas com contrato
+`EVOQUE CORPORATIVO` têm valor zero — são os colaboradores de verdade — e as 389
+linhas com valor são assinantes `EVOPASS` que pagam a própria academia. Aceitar
+valor no fluxo de catálogo e exigir valor no de fechamento é deliberado.
 
 `BillingSpreadsheetReader.Read` não pode ser enfraquecido para servir ao
 catálogo. Nenhum dos dois fluxos cria cobrança: a mutação no Asaas continua

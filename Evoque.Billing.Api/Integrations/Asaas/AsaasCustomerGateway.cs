@@ -37,8 +37,9 @@ public sealed class AsaasCustomerGateway(
             cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
+            var failureReason = await AsaasErrorMessage.ReadAsync(response, cancellationToken);
             throw new ExternalOperationNotAllowedException(
-                "Não foi possível consultar os clientes no Asaas.");
+                $"Não foi possível consultar os clientes no Asaas: {failureReason}");
         }
 
         var responseData = await response.Content.ReadFromJsonAsync<AsaasCustomerListResponse>(
@@ -104,8 +105,9 @@ public sealed class AsaasCustomerGateway(
             cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
+            var refusalReason = await AsaasErrorMessage.ReadAsync(response, cancellationToken);
             throw new ExternalOperationNotAllowedException(
-                $"O Asaas Sandbox recusou a criação do cliente com HTTP {(int)response.StatusCode}.");
+                $"O Asaas Sandbox recusou a criação do cliente: {refusalReason}");
         }
 
         var responseData = await response.Content.ReadFromJsonAsync<AsaasCustomerResponse>(
@@ -130,8 +132,9 @@ public sealed class AsaasCustomerGateway(
         using var response = await httpClient.GetAsync($"customers?{queryString}", cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
+            var failureReason = await AsaasErrorMessage.ReadAsync(response, cancellationToken);
             throw new ExternalOperationNotAllowedException(
-                $"Não foi possível consultar o cliente no Asaas {asaasEnvironment}.");
+                $"Não foi possível consultar o cliente no Asaas {asaasEnvironment}: {failureReason}");
         }
 
         return await response.Content.ReadFromJsonAsync<AsaasCustomerListResponse>(

@@ -328,6 +328,77 @@ public sealed class BillingWorkflowTests
     }
 
     /// <summary>
+    /// Clicar duas vezes em "Gerar prévia do ciclo" acumulava lotes idênticos.
+    /// Cada um deles emitiria uma cobrança para a mesma prévia, e no Sandbox a
+    /// idempotência não protege: sairiam boletos duplicados para o cliente.
+    /// </summary>
+    [Fact]
+    public async Task CreatePreviewAsync_RefusesADraftThatIsAlreadyInAnUnresolvedBatch()
+    {
+        var services = CreateServices();
+        var billingPeriodReference = new BillingPeriodReference(2026, 8);
+        await services.BillingPeriodService.CreateAsync(billingPeriodReference, "maria", CancellationToken.None);
+        var billingDraft = await services.BillingDraftService.CreateAsync(
+            billingPeriodReference,
+            CreateDraftCommand("empresa-unica", "Empresa Única"),
+            "maria",
+            CancellationToken.None);
+        await services.BillingDraftService.ApproveAsync(billingDraft.Id, "maria", CancellationToken.None);
+
+        var firstRequest = new CreateChargeBatchPreviewRequest(
+            "maria",
+            new DateOnly(2026, 9, 5),
+            "Sandbox",
+            [billingDraft.Id]);
+        var firstChargeBatch = await services.ChargeBatchService.CreatePreviewAsync(
+            firstRequest,
+            CancellationToken.None);
+
+        var exception = await Assert.ThrowsAsync<ConflictException>(() =>
+            services.ChargeBatchService.CreatePreviewAsync(
+                new CreateChargeBatchPreviewRequest(
+                    "maria",
+                    new DateOnly(2026, 9, 5),
+                    "Sandbox",
+                    [billingDraft.Id]),
+                CancellationToken.None));
+
+        Assert.Contains(firstChargeBatch.Id.ToString(), exception.Message);
+    }
+
+    [Fact]
+    public async Task CreatePreviewAsync_AllowsANewBatchAfterThePreviousOneIsResolved()
+    {
+        var asaasChargeGateway = new RecordingAsaasChargeGateway();
+        var services = CreateServices(asaasChargeGateway);
+        var billingPeriodReference = new BillingPeriodReference(2026, 8);
+        await services.BillingPeriodService.CreateAsync(billingPeriodReference, "maria", CancellationToken.None);
+        var billingDraft = await services.BillingDraftService.CreateAsync(
+            billingPeriodReference,
+            CreateDraftCommand("empresa-unica", "Empresa Única"),
+            "maria",
+            CancellationToken.None);
+        await services.BillingDraftService.ApproveAsync(billingDraft.Id, "maria", CancellationToken.None);
+        var firstChargeBatch = await services.ChargeBatchService.CreatePreviewAsync(
+            new CreateChargeBatchPreviewRequest("maria", new DateOnly(2026, 9, 5), "Sandbox", [billingDraft.Id]),
+            CancellationToken.None);
+        await services.ChargeBatchService.ApproveAsync(
+            firstChargeBatch.Id,
+            new ApproveChargeBatchRequest("maria"),
+            CancellationToken.None);
+        await services.ChargeBatchService.ExecuteAsync(
+            firstChargeBatch.Id,
+            new ExecuteChargeBatchRequest("maria", "CONFIRMAR"),
+            CancellationToken.None);
+
+        var secondChargeBatch = await services.ChargeBatchService.CreatePreviewAsync(
+            new CreateChargeBatchPreviewRequest("maria", new DateOnly(2026, 9, 5), "Sandbox", [billingDraft.Id]),
+            CancellationToken.None);
+
+        Assert.NotEqual(firstChargeBatch.Id, secondChargeBatch.Id);
+    }
+
+    /// <summary>
     /// Regressão do motivo pelo qual o lote agendado nunca achava empresa: ele
     /// filtrava pelo dia do vencimento. Nenhum vencimento real cai em 02, 18, 20
     /// ou 25 — eles caem em 06, 10, 12, 27, 30 — então o filtro voltava vazio.

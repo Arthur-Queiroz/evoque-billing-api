@@ -199,6 +199,16 @@ public sealed class ChargeBatchService(
             throw new ValidationException("Todas as prévias de um lote precisam pertencer à mesma competência.");
         }
 
+        // Um retry nasce de um lote concluído com falhas e repete de propósito
+        // as prévias que não viraram cobrança; ele não é duplicata.
+        if (retryOfChargeBatchId is null)
+        {
+            await EnsureDraftsAreNotInAnUnresolvedBatchAsync(
+                billingPeriodIds[0],
+                billingDraftIds,
+                cancellationToken);
+        }
+
         var createdAt = DateTimeOffset.UtcNow;
         var chargeBatch = new ChargeBatch(
             billingPeriodIds[0],
@@ -310,6 +320,40 @@ public sealed class ChargeBatchService(
         {
             throw new ValidationException("Digite CONFIRMAR para autorizar a criação do lote.");
         }
+    }
+
+    /// <summary>
+    /// Impede uma segunda prévia para uma empresa que já está em um lote não
+    /// concluído. Sem isso, repetir "Gerar prévia do ciclo" acumulava lotes
+    /// idênticos e cada um deles emitiria uma cobrança para a mesma prévia — no
+    /// Sandbox a idempotência não protege, então sairiam boletos duplicados.
+    /// </summary>
+    private async Task EnsureDraftsAreNotInAnUnresolvedBatchAsync(
+        Guid billingPeriodId,
+        IReadOnlyCollection<Guid> billingDraftIds,
+        CancellationToken cancellationToken)
+    {
+        var existingChargeBatches = await chargeBatchRepository.ListByBillingPeriodIdAsync(
+            billingPeriodId,
+            cancellationToken);
+        var unresolvedChargeBatch = existingChargeBatches.FirstOrDefault(chargeBatch =>
+            IsUnresolved(chargeBatch.Status)
+            && chargeBatch.Items.Any(item => billingDraftIds.Contains(item.BillingDraftId)));
+        if (unresolvedChargeBatch is null)
+        {
+            return;
+        }
+
+        throw new ConflictException(
+            $"O lote {unresolvedChargeBatch.Id} já contém uma das prévias selecionadas e ainda não foi "
+            + "concluído. Aprove ou execute esse lote em vez de criar outro.");
+    }
+
+    private static bool IsUnresolved(ChargeBatchStatus status)
+    {
+        return status is ChargeBatchStatus.AwaitingApproval
+            or ChargeBatchStatus.Approved
+            or ChargeBatchStatus.Processing;
     }
 
     private static string GetFailureMessage(Exception exception)

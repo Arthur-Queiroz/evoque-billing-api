@@ -10,6 +10,7 @@ public sealed class ChargeBatchService(
     IChargeBatchRepository chargeBatchRepository,
     IAuditLogRepository auditLogRepository,
     ChargeCreationService chargeCreationService,
+    FiscalInvoiceService fiscalInvoiceService,
     TimeProvider timeProvider)
 {
     public async Task<ChargeBatchResponse> CreatePreviewAsync(
@@ -253,6 +254,33 @@ public sealed class ChargeBatchService(
                 chargeCreationResult.BankSlipUrl,
                 chargeCreationResult.CreatedNow,
                 DateTimeOffset.UtcNow);
+
+            // A cobrança já existe no Asaas neste ponto. Uma falha da nota fiscal
+            // é registrada em fiscal_invoices e na auditoria pelo próprio serviço;
+            // ela nunca pode marcar o item como falho, porque MarkFailed apaga o
+            // identificador da cobrança e o boleto real ficaria órfão no lote.
+            try
+            {
+                await fiscalInvoiceService.IssueForChargeAsync(
+                    billingDraftId,
+                    chargeCreationResult.AsaasPaymentId,
+                    operatorId,
+                    chargeBatch.AsaasEnvironment,
+                    cancellationToken);
+            }
+            catch (Exception fiscalInvoiceException) when (fiscalInvoiceException is not OperationCanceledException)
+            {
+                await auditLogRepository.AddAsync(
+                    AuditLog.Create(
+                        "fiscal-invoice.issuance-error",
+                        operatorId,
+                        DateTimeOffset.UtcNow,
+                        chargeBatch.BillingPeriodId,
+                        billingDraftId,
+                        $"A cobrança foi criada, mas a emissão da nota fiscal falhou: {fiscalInvoiceException.Message}"),
+                    cancellationToken);
+            }
+
             await auditLogRepository.AddAsync(
                 AuditLog.Create(
                     "charge-batch.item.completed",

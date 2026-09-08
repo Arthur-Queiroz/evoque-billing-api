@@ -26,6 +26,9 @@ public sealed record UpdateCompanyRequest(
 /// <summary>Corpo das ações que só precisam saber quem é o responsável.</summary>
 public sealed record CompanyOperatorRequest(string OperatorId);
 
+/// <summary>Liga ou desliga a retenção de ISS da empresa nas notas fiscais.</summary>
+public sealed record SetCompanyIssRetentionRequest(bool RetainsIss, string OperatorId);
+
 public sealed record SynchronizeCompanyAsaasSandboxRequest(
     string Email,
     string OperatorId);
@@ -89,6 +92,7 @@ public sealed record CompanyResponse(
     bool HasActiveSchedule,
     string? AsaasSandboxCustomerId,
     string? AsaasProductionCustomerId,
+    bool RetainsIss,
     DateTimeOffset UpdatedAt,
     string UpdatedBy)
 {
@@ -120,6 +124,7 @@ public sealed record CompanyResponse(
             companyBillingSchedule?.IsActive ?? false,
             company.AsaasSandboxCustomerId,
             company.AsaasProductionCustomerId,
+            company.RetainsIss,
             company.UpdatedAt,
             company.UpdatedBy);
     }

@@ -12,6 +12,8 @@ public sealed class DatabaseSchemaInitializer(MySqlConnectionFactory connectionF
     private const string CompanyCatalogMigrationId = "006_add_company_catalog";
     private const string CorporateMemberMigrationId = "007_add_corporate_member_crm";
     private const string ClosingDayMigrationId = "008_rename_billing_day_to_closing_day";
+    private const string FiscalInvoiceMigrationId = "009_add_fiscal_invoices";
+    private const string CompanyIssRetentionMigrationId = "010_add_company_iss_retention";
 
     public async Task InitializeAsync(CancellationToken cancellationToken)
     {
@@ -190,6 +192,85 @@ public sealed class DatabaseSchemaInitializer(MySqlConnectionFactory connectionF
         await CreateCompanyCatalogTablesAsync(connection, cancellationToken);
         await CreateCorporateMemberTablesAsync(connection, cancellationToken);
         await RenameBillingDayToClosingDayAsync(connection, cancellationToken);
+        await CreateFiscalInvoiceTableAsync(connection, cancellationToken);
+        await AddCompanyIssRetentionAsync(connection, cancellationToken);
+    }
+
+    /// <summary>
+    /// Schema da nota fiscal de serviço emitida junto com a cobrança. A chave
+    /// única (billing_draft_id, sequence_number) é a defesa final contra nota
+    /// duplicada na prefeitura: cancelamento de nota já foi negado por
+    /// competência encerrada.
+    /// </summary>
+    private static async Task CreateFiscalInvoiceTableAsync(
+        MySqlConnection connection,
+        CancellationToken cancellationToken)
+    {
+        if (await IsAppliedAsync(connection, FiscalInvoiceMigrationId, cancellationToken))
+        {
+            return;
+        }
+
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        await ExecuteAsync(connection, """
+            CREATE TABLE fiscal_invoices (
+                id CHAR(36) NOT NULL PRIMARY KEY,
+                billing_draft_id CHAR(36) NOT NULL,
+                billing_period_id CHAR(36) NOT NULL,
+                sequence_number INT NOT NULL,
+                asaas_payment_id VARCHAR(128) NOT NULL,
+                asaas_invoice_id VARCHAR(128) NULL,
+                status VARCHAR(32) NOT NULL,
+                value DECIMAL(18, 2) NOT NULL,
+                effective_date DATE NOT NULL,
+                retains_iss BOOLEAN NOT NULL,
+                service_description VARCHAR(500) NOT NULL,
+                error_message TEXT NULL,
+                created_at DATETIME(6) NOT NULL,
+                updated_at DATETIME(6) NOT NULL,
+                CONSTRAINT fk_fiscal_invoices_draft
+                    FOREIGN KEY (billing_draft_id) REFERENCES billing_drafts (id),
+                CONSTRAINT fk_fiscal_invoices_period
+                    FOREIGN KEY (billing_period_id) REFERENCES billing_periods (id),
+                CONSTRAINT uq_fiscal_invoices_draft_sequence
+                    UNIQUE (billing_draft_id, sequence_number),
+                INDEX ix_fiscal_invoices_period_created (billing_period_id, created_at)
+            );
+            """, transaction, cancellationToken);
+
+        await InsertMigrationAsync(connection, transaction, FiscalInvoiceMigrationId, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// A retenção de ISS é atributo do tomador, não da nota. Quatro empresas
+    /// nascem com retenção ligada por evidência inequívoca da produção: duas já
+    /// emitem com retenção e as outras duas têm todas as notas recusadas pela
+    /// prefeitura pedindo exatamente essa retenção.
+    /// </summary>
+    private static async Task AddCompanyIssRetentionAsync(
+        MySqlConnection connection,
+        CancellationToken cancellationToken)
+    {
+        if (await IsAppliedAsync(connection, CompanyIssRetentionMigrationId, cancellationToken))
+        {
+            return;
+        }
+
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        await ExecuteAsync(connection, """
+            ALTER TABLE companies
+                ADD COLUMN retains_iss BOOLEAN NOT NULL DEFAULT FALSE AFTER asaas_production_customer_id;
+            """, transaction, cancellationToken);
+
+        await ExecuteAsync(connection, """
+            UPDATE companies
+            SET retains_iss = TRUE
+            WHERE tax_id IN ('04902653000117', '59274167000193', '58515495000171', '53164208000102');
+            """, transaction, cancellationToken);
+
+        await InsertMigrationAsync(connection, transaction, CompanyIssRetentionMigrationId, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
     }
 
     /// <summary>

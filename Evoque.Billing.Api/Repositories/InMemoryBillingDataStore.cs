@@ -13,6 +13,8 @@ public sealed class InMemoryBillingDataStore
 
     public ConcurrentDictionary<Guid, ChargeBatch> ChargeBatches { get; } = new();
 
+    public ConcurrentDictionary<Guid, FiscalInvoice> FiscalInvoices { get; } = new();
+
     public ConcurrentDictionary<string, CompanyBillingSchedule> CompanyBillingSchedules { get; } = new();
 
     public ConcurrentDictionary<string, Company> Companies { get; } = new();

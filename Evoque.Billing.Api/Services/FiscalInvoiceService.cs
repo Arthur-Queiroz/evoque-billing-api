@@ -1,3 +1,4 @@
+using Evoque.Billing.Api.Contracts;
 using Evoque.Billing.Api.Domain;
 using Evoque.Billing.Api.Integrations.Asaas;
 using Evoque.Billing.Api.Repositories;
@@ -20,6 +21,9 @@ public sealed class FiscalInvoiceService(
     IOptions<FiscalInvoiceOptions> fiscalInvoiceOptions,
     TimeProvider timeProvider)
 {
+    /// <summary>Confirmação exigida na reemissão, como nas demais operações mutáveis de produção.</summary>
+    public const string RequiredConfirmationPhrase = "CONFIRMAR";
+
     public async Task IssueForChargeAsync(
         Guid billingDraftId,
         string asaasPaymentId,
@@ -56,6 +60,133 @@ public sealed class FiscalInvoiceService(
             existingInvoices.Count + 1,
             operatorId,
             cancellationToken);
+    }
+
+    public async Task<IReadOnlyCollection<FiscalInvoiceResponse>> ListByBillingPeriodAsync(
+        BillingPeriodReference billingPeriodReference,
+        CancellationToken cancellationToken)
+    {
+        var billingPeriod = await billingPeriodRepository.FindByReferenceAsync(
+            billingPeriodReference,
+            cancellationToken)
+            ?? throw new NotFoundException("A competência solicitada não foi encontrada.");
+
+        var fiscalInvoices = await fiscalInvoiceRepository.ListByBillingPeriodIdAsync(
+            billingPeriod.Id,
+            cancellationToken);
+        return fiscalInvoices.Select(FiscalInvoiceResponse.FromDomain).ToArray();
+    }
+
+    /// <summary>
+    /// Atualiza no Asaas o status das notas que ainda podem mudar. É acionado pela
+    /// tela: descobrir o desfecho não precisa ser automático, mas precisa existir —
+    /// notas recusadas já ficaram meses sem ninguém ver.
+    /// </summary>
+    public async Task<IReadOnlyCollection<FiscalInvoiceResponse>> SynchronizeAsync(
+        BillingPeriodReference billingPeriodReference,
+        string operatorId,
+        CancellationToken cancellationToken)
+    {
+        var billingPeriod = await billingPeriodRepository.FindByReferenceAsync(
+            billingPeriodReference,
+            cancellationToken)
+            ?? throw new NotFoundException("A competência solicitada não foi encontrada.");
+
+        var fiscalInvoices = await fiscalInvoiceRepository.ListByBillingPeriodIdAsync(
+            billingPeriod.Id,
+            cancellationToken);
+
+        // Uma chamada HTTP por nota, em série, dentro do mesmo request — como
+        // ChargeBatchService já faz por item de lote. Aceitável no volume atual
+        // (39 empresas), mas uma resposta lenta da prefeitura numa nota atrasa a
+        // sincronização das demais desta mesma chamada.
+        foreach (var fiscalInvoice in fiscalInvoices)
+        {
+            if (fiscalInvoice.IsSettled || string.IsNullOrWhiteSpace(fiscalInvoice.AsaasInvoiceId))
+            {
+                continue;
+            }
+
+            var invoiceState = await asaasInvoiceGateway.GetInvoiceAsync(
+                AsaasEnvironment.Production,
+                fiscalInvoice.AsaasInvoiceId,
+                cancellationToken);
+            var previousStatus = fiscalInvoice.Status;
+            fiscalInvoice.ApplyAsaasStatus(
+                invoiceState.Status,
+                invoiceState.StatusDescription,
+                DateTimeOffset.UtcNow);
+            if (fiscalInvoice.Status == previousStatus)
+            {
+                continue;
+            }
+
+            await fiscalInvoiceRepository.UpdateAsync(fiscalInvoice, cancellationToken);
+            await RegisterAuditAsync(
+                "fiscal-invoice.status-synchronized",
+                operatorId,
+                fiscalInvoice.BillingPeriodId,
+                fiscalInvoice.BillingDraftId,
+                $"Nota fiscal {fiscalInvoice.AsaasInvoiceId} passou de {previousStatus} para {fiscalInvoice.Status}.",
+                cancellationToken);
+        }
+
+        return fiscalInvoices.Select(FiscalInvoiceResponse.FromDomain).ToArray();
+    }
+
+    /// <summary>
+    /// Reemite uma nota recusada pela prefeitura. Cria a sequência seguinte com a
+    /// configuração vigente da empresa: é o que torna útil corrigir a retenção de
+    /// ISS depois de uma recusa. Uma nota já autorizada nunca pode passar por
+    /// aqui — reemiti-la duplicaria a nota na prefeitura, e o cancelamento
+    /// depende dela, que já negou um pedido por competência encerrada.
+    /// </summary>
+    public async Task<FiscalInvoiceResponse> ReissueAsync(
+        Guid fiscalInvoiceId,
+        ReissueFiscalInvoiceRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!string.Equals(
+                request.ConfirmationPhrase?.Trim(),
+                RequiredConfirmationPhrase,
+                StringComparison.Ordinal))
+        {
+            throw new ValidationException("Digite CONFIRMAR para autorizar a reemissão da nota fiscal.");
+        }
+
+        var refusedInvoice = await fiscalInvoiceRepository.FindByIdAsync(fiscalInvoiceId, cancellationToken)
+            ?? throw new NotFoundException("A nota fiscal não foi encontrada.");
+        if (!refusedInvoice.CanBeReissued)
+        {
+            throw new ConflictException("Somente uma nota fiscal recusada pode ser reemitida.");
+        }
+
+        var billingDraft = await billingDraftRepository.FindByIdAsync(
+            refusedInvoice.BillingDraftId,
+            cancellationToken)
+            ?? throw new NotFoundException("A prévia de faturamento não foi encontrada.");
+        var existingInvoices = await fiscalInvoiceRepository.ListByBillingDraftIdAsync(
+            refusedInvoice.BillingDraftId,
+            cancellationToken);
+
+        // Uma nota recusada continua recusada para sempre, inclusive depois de
+        // uma reemissão bem-sucedida. Sem esta guarda, acionar a nota antiga de
+        // novo emitiria uma segunda nota válida para a mesma prévia — e a
+        // prefeitura já negou cancelamento por competência encerrada.
+        if (existingInvoices.Any(existingInvoice =>
+                existingInvoice.Id != refusedInvoice.Id && !existingInvoice.CanBeReissued))
+        {
+            throw new ConflictException(
+                "Esta prévia já possui uma nota fiscal mais recente que não está recusada.");
+        }
+
+        var reissuedInvoice = await IssueAsync(
+            billingDraft,
+            refusedInvoice.AsaasPaymentId,
+            existingInvoices.Count + 1,
+            request.OperatorId,
+            cancellationToken);
+        return FiscalInvoiceResponse.FromDomain(reissuedInvoice);
     }
 
     private async Task<FiscalInvoice> IssueAsync(

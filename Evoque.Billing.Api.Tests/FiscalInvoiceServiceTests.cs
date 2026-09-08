@@ -177,6 +177,198 @@ public sealed class FiscalInvoiceServiceTests
         Assert.Contains(auditLogs, auditLog => auditLog.Action == "fiscal-invoice.issuance-error");
     }
 
+    [Fact]
+    public async Task SynchronizeAsync_UpdatesTheStatusOfInvoicesThatAreNotSettled()
+    {
+        var context = await CreateApprovedDraftAsync();
+        await ExecuteProductionBatchAsync(context);
+
+        var fiscalInvoices = await context.FiscalInvoiceService.SynchronizeAsync(
+            new BillingPeriodReference(2026, 8),
+            OperatorId,
+            CancellationToken.None);
+
+        Assert.Equal("Authorized", Assert.Single(fiscalInvoices).Status);
+        var auditLogs = await context.AuditLogRepository.ListByBillingDraftIdAsync(
+            context.BillingDraftId,
+            CancellationToken.None);
+        Assert.Contains(auditLogs, auditLog => auditLog.Action == "fiscal-invoice.status-synchronized");
+    }
+
+    /// <summary>
+    /// Uma nota assentada (aqui, Failed) não muda mais e não pode gerar tráfego
+    /// desnecessário contra o Asaas a cada sincronização da competência.
+    /// </summary>
+    [Fact]
+    public async Task SynchronizeAsync_DoesNotQueryASettledInvoice()
+    {
+        var invoiceGateway = new RecordingAsaasInvoiceGateway(
+            scheduleFailureMessage: "Conforme legislação municipal, deve ter retenção de ISS.");
+        var context = await CreateApprovedDraftAsync(invoiceGateway: invoiceGateway);
+        await ExecuteProductionBatchAsync(context);
+        var failedInvoice = Assert.Single(
+            await context.FiscalInvoiceRepository.ListByBillingPeriodIdAsync(
+                context.BillingPeriodId,
+                CancellationToken.None));
+        Assert.Equal(FiscalInvoiceStatus.Failed, failedInvoice.Status);
+
+        await context.FiscalInvoiceService.SynchronizeAsync(
+            new BillingPeriodReference(2026, 8),
+            OperatorId,
+            CancellationToken.None);
+
+        Assert.Equal(0, invoiceGateway.GetCallCount);
+    }
+
+    /// <summary>
+    /// Quando o Asaas devolve o mesmo status já gravado, nada mudou: gravar de
+    /// novo e auditar de novo seria ruído, não informação.
+    /// </summary>
+    [Fact]
+    public async Task SynchronizeAsync_DoesNotUpdateOrAuditWhenTheStatusIsUnchanged()
+    {
+        var invoiceGateway = new RecordingAsaasInvoiceGateway(statusOnGet: "SCHEDULED");
+        var countingFiscalInvoiceRepository = new CountingFiscalInvoiceRepository(
+            new InMemoryFiscalInvoiceRepository(new InMemoryBillingDataStore()));
+        var context = await CreateApprovedDraftAsync(
+            invoiceGateway: invoiceGateway,
+            fiscalInvoiceRepository: countingFiscalInvoiceRepository);
+        await ExecuteProductionBatchAsync(context);
+        var scheduledInvoice = Assert.Single(
+            await context.FiscalInvoiceRepository.ListByBillingPeriodIdAsync(
+                context.BillingPeriodId,
+                CancellationToken.None));
+        Assert.Equal(FiscalInvoiceStatus.Scheduled, scheduledInvoice.Status);
+        var updateCallCountBeforeSync = countingFiscalInvoiceRepository.UpdateCallCount;
+
+        await context.FiscalInvoiceService.SynchronizeAsync(
+            new BillingPeriodReference(2026, 8),
+            OperatorId,
+            CancellationToken.None);
+
+        Assert.Equal(1, invoiceGateway.GetCallCount);
+        Assert.Equal(updateCallCountBeforeSync, countingFiscalInvoiceRepository.UpdateCallCount);
+        var auditLogs = await context.AuditLogRepository.ListByBillingDraftIdAsync(
+            context.BillingDraftId,
+            CancellationToken.None);
+        Assert.DoesNotContain(auditLogs, auditLog => auditLog.Action == "fiscal-invoice.status-synchronized");
+    }
+
+    [Fact]
+    public async Task ReissueAsync_RequiresTheConfirmationPhrase()
+    {
+        var context = await CreateApprovedDraftAsync(
+            invoiceGateway: new RecordingAsaasInvoiceGateway(
+                scheduleFailureMessage: "Conforme legislação municipal, deve ter retenção de ISS."));
+        await ExecuteProductionBatchAsync(context);
+        var failedInvoice = Assert.Single(
+            await context.FiscalInvoiceRepository.ListByBillingPeriodIdAsync(
+                context.BillingPeriodId,
+                CancellationToken.None));
+
+        await Assert.ThrowsAsync<ValidationException>(() => context.FiscalInvoiceService.ReissueAsync(
+            failedInvoice.Id,
+            new ReissueFiscalInvoiceRequest(OperatorId, ""),
+            CancellationToken.None));
+    }
+
+    /// <summary>
+    /// O cenário perigoso é a nota autorizada, não a apenas agendada: é dela que
+    /// sairia a nota duplicada na prefeitura, sem chance de cancelamento.
+    /// </summary>
+    [Fact]
+    public async Task ReissueAsync_RefusesAnInvoiceThatIsNotFailed()
+    {
+        var context = await CreateApprovedDraftAsync();
+        await ExecuteProductionBatchAsync(context);
+        await context.FiscalInvoiceService.SynchronizeAsync(
+            new BillingPeriodReference(2026, 8),
+            OperatorId,
+            CancellationToken.None);
+        var authorizedInvoice = Assert.Single(
+            await context.FiscalInvoiceRepository.ListByBillingPeriodIdAsync(
+                context.BillingPeriodId,
+                CancellationToken.None));
+        Assert.Equal(FiscalInvoiceStatus.Authorized, authorizedInvoice.Status);
+
+        await Assert.ThrowsAsync<ConflictException>(() => context.FiscalInvoiceService.ReissueAsync(
+            authorizedInvoice.Id,
+            new ReissueFiscalInvoiceRequest(OperatorId, "CONFIRMAR"),
+            CancellationToken.None));
+    }
+
+    /// <summary>
+    /// É esse caminho que torna útil corrigir a retenção de ISS de uma empresa:
+    /// sem ele, a nota recusada pela prefeitura ficaria recusada para sempre.
+    /// </summary>
+    [Fact]
+    public async Task ReissueAsync_CreatesTheNextSequenceWithTheCurrentCompanySettings()
+    {
+        var invoiceGateway = new RecordingAsaasInvoiceGateway(
+            scheduleFailureMessage: "Conforme legislação municipal, deve ter retenção de ISS.");
+        var context = await CreateApprovedDraftAsync(invoiceGateway: invoiceGateway);
+        await ExecuteProductionBatchAsync(context);
+        var failedInvoice = Assert.Single(
+            await context.FiscalInvoiceRepository.ListByBillingPeriodIdAsync(
+                context.BillingPeriodId,
+                CancellationToken.None));
+
+        invoiceGateway.StopFailing();
+        await context.CompanyRepository.UpsertAsync(
+            ApplyIssRetention(await context.CompanyRepository.FindByTaxIdAsync(
+                CompanyTaxIdValue,
+                CancellationToken.None)),
+            CancellationToken.None);
+
+        var reissuedInvoice = await context.FiscalInvoiceService.ReissueAsync(
+            failedInvoice.Id,
+            new ReissueFiscalInvoiceRequest(OperatorId, "CONFIRMAR"),
+            CancellationToken.None);
+
+        Assert.Equal(2, reissuedInvoice.Sequence);
+        Assert.Equal("Scheduled", reissuedInvoice.Status);
+        Assert.True(Assert.Single(invoiceGateway.ScheduledRequests).RetainsIss);
+    }
+
+    /// <summary>
+    /// Nota nº1 falha, é reemitida com sucesso como nº2. Acionar a nº1 de novo
+    /// não pode emitir uma nº3: a prefeitura já tem uma nota viva (a nº2) para
+    /// esta prévia, e uma segunda nota válida seria duplicação irreversível — o
+    /// cancelamento já foi negado por competência encerrada em casos reais.
+    /// </summary>
+    [Fact]
+    public async Task ReissueAsync_RefusesASecondReissueOfAnInvoiceAlreadySucceeded()
+    {
+        var invoiceGateway = new RecordingAsaasInvoiceGateway(
+            scheduleFailureMessage: "Conforme legislação municipal, deve ter retenção de ISS.");
+        var context = await CreateApprovedDraftAsync(invoiceGateway: invoiceGateway);
+        await ExecuteProductionBatchAsync(context);
+        var firstInvoice = Assert.Single(
+            await context.FiscalInvoiceRepository.ListByBillingPeriodIdAsync(
+                context.BillingPeriodId,
+                CancellationToken.None));
+
+        invoiceGateway.StopFailing();
+        await context.FiscalInvoiceService.ReissueAsync(
+            firstInvoice.Id,
+            new ReissueFiscalInvoiceRequest(OperatorId, "CONFIRMAR"),
+            CancellationToken.None);
+        var scheduleCallCountAfterSuccessfulReissue = invoiceGateway.ScheduleCallCount;
+
+        await Assert.ThrowsAsync<ConflictException>(() => context.FiscalInvoiceService.ReissueAsync(
+            firstInvoice.Id,
+            new ReissueFiscalInvoiceRequest(OperatorId, "CONFIRMAR"),
+            CancellationToken.None));
+        Assert.Equal(scheduleCallCountAfterSuccessfulReissue, invoiceGateway.ScheduleCallCount);
+    }
+
+    private static Company ApplyIssRetention(Company? company)
+    {
+        ArgumentNullException.ThrowIfNull(company);
+        company.SetIssRetention(true, OperatorId, DateTimeOffset.UtcNow);
+        return company;
+    }
+
     private static async Task<ChargeBatchResponse> ExecuteProductionBatchAsync(TestContext context)
     {
         var chargeBatch = await context.ChargeBatchService.CreatePreviewAsync(
@@ -283,6 +475,7 @@ public sealed class FiscalInvoiceServiceTests
             fiscalInvoiceRepositoryToUse,
             auditLogRepository,
             recordingInvoiceGateway,
+            companyRepository,
             billingDraft.Id,
             billingPeriod.Id);
     }
@@ -293,6 +486,7 @@ public sealed class FiscalInvoiceServiceTests
         IFiscalInvoiceRepository FiscalInvoiceRepository,
         InMemoryAuditLogRepository AuditLogRepository,
         RecordingAsaasInvoiceGateway InvoiceGateway,
+        InMemoryCompanyRepository CompanyRepository,
         Guid BillingDraftId,
         Guid BillingPeriodId);
 
@@ -301,10 +495,19 @@ public sealed class FiscalInvoiceServiceTests
         string statusOnGet = "AUTHORIZED") : IAsaasInvoiceGateway
     {
         private readonly List<AsaasInvoiceRequest> scheduledRequests = [];
+        private readonly List<string> queriedInvoiceIds = [];
+        private string? currentFailureMessage = scheduleFailureMessage;
 
         public int ScheduleCallCount { get; private set; }
 
+        public int GetCallCount { get; private set; }
+
         public IReadOnlyList<AsaasInvoiceRequest> ScheduledRequests => scheduledRequests;
+
+        public IReadOnlyList<string> QueriedInvoiceIds => queriedInvoiceIds;
+
+        /// <summary>Simula a empresa corrigindo o cadastro depois da recusa da prefeitura.</summary>
+        public void StopFailing() => currentFailureMessage = null;
 
         public Task<AsaasInvoiceCreation> ScheduleInvoiceAsync(
             AsaasEnvironment asaasEnvironment,
@@ -312,9 +515,9 @@ public sealed class FiscalInvoiceServiceTests
             CancellationToken cancellationToken)
         {
             ScheduleCallCount++;
-            if (scheduleFailureMessage is not null)
+            if (currentFailureMessage is not null)
             {
-                throw new ExternalOperationNotAllowedException(scheduleFailureMessage);
+                throw new ExternalOperationNotAllowedException(currentFailureMessage);
             }
 
             scheduledRequests.Add(request);
@@ -326,6 +529,8 @@ public sealed class FiscalInvoiceServiceTests
             string asaasInvoiceId,
             CancellationToken cancellationToken)
         {
+            GetCallCount++;
+            queriedInvoiceIds.Add(asaasInvoiceId);
             return Task.FromResult(new AsaasInvoiceState(asaasInvoiceId, statusOnGet, null));
         }
     }
@@ -365,6 +570,49 @@ public sealed class FiscalInvoiceServiceTests
             CancellationToken cancellationToken)
         {
             return Task.FromResult<IReadOnlyCollection<FiscalInvoice>>([]);
+        }
+    }
+
+    /// <summary>
+    /// Conta chamadas a <see cref="IFiscalInvoiceRepository.UpdateAsync"/> sem
+    /// mudar o comportamento de persistência. É a forma correta de provar que
+    /// <c>SynchronizeAsync</c> não gravou nada quando o status não muda: o
+    /// objeto em memória é compartilhado por referência, então checar
+    /// <c>UpdatedAt</c> no repositório InMemory não pega a ausência da gravação.
+    /// </summary>
+    private sealed class CountingFiscalInvoiceRepository(IFiscalInvoiceRepository innerRepository)
+        : IFiscalInvoiceRepository
+    {
+        public int UpdateCallCount { get; private set; }
+
+        public Task AddAsync(FiscalInvoice fiscalInvoice, CancellationToken cancellationToken)
+        {
+            return innerRepository.AddAsync(fiscalInvoice, cancellationToken);
+        }
+
+        public Task UpdateAsync(FiscalInvoice fiscalInvoice, CancellationToken cancellationToken)
+        {
+            UpdateCallCount++;
+            return innerRepository.UpdateAsync(fiscalInvoice, cancellationToken);
+        }
+
+        public Task<FiscalInvoice?> FindByIdAsync(Guid fiscalInvoiceId, CancellationToken cancellationToken)
+        {
+            return innerRepository.FindByIdAsync(fiscalInvoiceId, cancellationToken);
+        }
+
+        public Task<IReadOnlyCollection<FiscalInvoice>> ListByBillingDraftIdAsync(
+            Guid billingDraftId,
+            CancellationToken cancellationToken)
+        {
+            return innerRepository.ListByBillingDraftIdAsync(billingDraftId, cancellationToken);
+        }
+
+        public Task<IReadOnlyCollection<FiscalInvoice>> ListByBillingPeriodIdAsync(
+            Guid billingPeriodId,
+            CancellationToken cancellationToken)
+        {
+            return innerRepository.ListByBillingPeriodIdAsync(billingPeriodId, cancellationToken);
         }
     }
 

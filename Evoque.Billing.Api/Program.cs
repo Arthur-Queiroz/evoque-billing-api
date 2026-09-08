@@ -27,10 +27,13 @@ builder.Services.AddCors(options =>
 builder.Services.AddHttpClient<AsaasChargeGateway>();
 builder.Services.AddHttpClient<AsaasCustomerNotificationGateway>();
 builder.Services.AddHttpClient<AsaasCustomerGateway>();
+builder.Services.AddHttpClient<AsaasInvoiceGateway>();
 builder.Services.AddHttpClient<EvoDirectoryGateway>();
 builder.Services.AddHttpClient<BrasilApiCompanyRegistryGateway>();
 builder.Services.AddMemoryCache();
 builder.Services.Configure<AsaasOptions>(builder.Configuration.GetSection(AsaasOptions.SectionName));
+builder.Services.Configure<FiscalInvoiceOptions>(
+    builder.Configuration.GetSection(FiscalInvoiceOptions.SectionName));
 builder.Services.Configure<EvoOptions>(builder.Configuration.GetSection(EvoOptions.SectionName));
 builder.Services.Configure<CompanyRegistryOptions>(
     builder.Configuration.GetSection(CompanyRegistryOptions.SectionName));
@@ -51,6 +54,7 @@ if (string.IsNullOrWhiteSpace(billingDatabaseConnectionString))
     builder.Services.AddScoped<IBillingDraftRepository, InMemoryBillingDraftRepository>();
     builder.Services.AddScoped<IAuditLogRepository, InMemoryAuditLogRepository>();
     builder.Services.AddScoped<IChargeBatchRepository, InMemoryChargeBatchRepository>();
+    builder.Services.AddScoped<IFiscalInvoiceRepository, InMemoryFiscalInvoiceRepository>();
     builder.Services.AddScoped<ICompanyBillingScheduleRepository, InMemoryCompanyBillingScheduleRepository>();
     builder.Services.AddScoped<ICompanyRepository, InMemoryCompanyRepository>();
     builder.Services.AddScoped<ICompanyCatalogImportRepository, InMemoryCompanyCatalogImportRepository>();
@@ -64,6 +68,7 @@ else
     builder.Services.AddScoped<IBillingDraftRepository, MySqlBillingDraftRepository>();
     builder.Services.AddScoped<IAuditLogRepository, MySqlAuditLogRepository>();
     builder.Services.AddScoped<IChargeBatchRepository, MySqlChargeBatchRepository>();
+    builder.Services.AddScoped<IFiscalInvoiceRepository, MySqlFiscalInvoiceRepository>();
     builder.Services.AddScoped<ICompanyBillingScheduleRepository, MySqlCompanyBillingScheduleRepository>();
     builder.Services.AddScoped<ICompanyRepository, MySqlCompanyRepository>();
     builder.Services.AddScoped<ICompanyCatalogImportRepository, MySqlCompanyCatalogImportRepository>();
@@ -71,6 +76,7 @@ else
 }
 
 builder.Services.AddScoped<IAsaasChargeGateway, AsaasChargeGateway>();
+builder.Services.AddScoped<IAsaasInvoiceGateway, AsaasInvoiceGateway>();
 builder.Services.AddScoped<IAsaasCustomerNotificationGateway, AsaasCustomerNotificationGateway>();
 builder.Services.AddScoped<IAsaasCustomerGateway, AsaasCustomerGateway>();
 builder.Services.AddScoped<IEvoDirectoryGateway, EvoDirectoryGateway>();
@@ -78,6 +84,7 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<BillingPeriodService>();
 builder.Services.AddScoped<BillingDraftService>();
 builder.Services.AddScoped<ChargeCreationService>();
+builder.Services.AddScoped<FiscalInvoiceService>();
 builder.Services.AddScoped<ChargeBatchService>();
 builder.Services.AddScoped<CompanyBillingScheduleService>();
 builder.Services.AddScoped<ScheduledChargeBatchService>();

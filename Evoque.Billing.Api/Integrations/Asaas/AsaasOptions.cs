@@ -6,6 +6,11 @@ public sealed class AsaasOptions
 {
     public const string SectionName = "Asaas";
 
+    // As cinco propriedades abaixo são a configuração legada de ambiente
+    // único, mantida só para não quebrar deploys existentes que ainda não
+    // migraram para as seções Sandbox/Production. GetConnection as usa como
+    // fallback quando a conexão do ambiente pedido não tem chave própria. A
+    // configuração atual, por ambiente, vive em Sandbox e Production abaixo.
     public string IntegrationEnvironment { get; init; } = "Sandbox";
 
     public string BaseUrl { get; init; } = "https://api-sandbox.asaas.com/v3/";
@@ -13,6 +18,8 @@ public sealed class AsaasOptions
     public string ApiKey { get; init; } = string.Empty;
 
     public bool AllowChargeCreation { get; init; }
+
+    public bool AllowInvoiceIssuance { get; init; }
 
     public AsaasConnectionOptions Sandbox { get; init; } = new();
 
@@ -34,6 +41,7 @@ public sealed class AsaasOptions
                 BaseUrl = BaseUrl,
                 ApiKey = ApiKey,
                 AllowChargeCreation = AllowChargeCreation,
+                AllowInvoiceIssuance = AllowInvoiceIssuance,
             };
         }
 
@@ -63,6 +71,16 @@ public sealed class AsaasOptions
 
         return GetConnection(asaasEnvironment).AllowChargeCreation;
     }
+
+    public bool CanIssueInvoices(AsaasEnvironment asaasEnvironment)
+    {
+        if (!IsConfigured(asaasEnvironment))
+        {
+            return false;
+        }
+
+        return GetConnection(asaasEnvironment).AllowInvoiceIssuance;
+    }
 }
 
 public sealed class AsaasConnectionOptions
@@ -72,6 +90,8 @@ public sealed class AsaasConnectionOptions
     public string ApiKey { get; init; } = string.Empty;
 
     public bool AllowChargeCreation { get; init; }
+
+    public bool AllowInvoiceIssuance { get; init; }
 
     public bool HasApiKey() => !string.IsNullOrWhiteSpace(ApiKey);
 }

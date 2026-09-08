@@ -1,3 +1,4 @@
+using Evoque.Billing.Api.Domain;
 using Evoque.Billing.Api.Integrations.Asaas;
 using Evoque.Billing.Api.Integrations.Evo;
 using Microsoft.Extensions.Options;
@@ -8,7 +9,8 @@ public sealed class StartupConfigurationValidator(
     IHostEnvironment hostEnvironment,
     IConfiguration configuration,
     IOptions<AsaasOptions> asaasOptions,
-    IOptions<EvoOptions> evoOptions)
+    IOptions<EvoOptions> evoOptions,
+    IOptions<FiscalInvoiceOptions> fiscalInvoiceOptions)
 {
     public void Validate()
     {
@@ -42,6 +44,16 @@ public sealed class StartupConfigurationValidator(
         {
             throw new InvalidOperationException(
                 "Asaas:ApiKey é obrigatório quando a criação de cobranças estiver habilitada.");
+        }
+
+        var invoiceIssuanceIsEnabledSomewhere = configuredAsaasOptions.AllowInvoiceIssuance
+            || configuredAsaasOptions.CanIssueInvoices(AsaasEnvironment.Sandbox)
+            || configuredAsaasOptions.CanIssueInvoices(AsaasEnvironment.Production);
+        if (invoiceIssuanceIsEnabledSomewhere && !fiscalInvoiceOptions.Value.IsComplete())
+        {
+            throw new InvalidOperationException(
+                "FiscalInvoice:MunicipalServiceId e FiscalInvoice:IssTaxRate são obrigatórios "
+                + "quando a emissão de notas fiscais estiver habilitada.");
         }
 
         ValidateEvoConfiguration(evoOptions.Value);

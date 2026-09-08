@@ -91,6 +91,28 @@ Controllers → Services → Repositories → MySQL
   persistência deste produto. Uma futura migração ou integração com eles exige
   decisão explícita, credenciais próprias e plano de reconciliação.
 
+## Camadas da nota fiscal
+
+```text
+FiscalInvoicesController ──→ FiscalInvoiceService
+ChargeBatchService ─────────↗   ↘ IAsaasInvoiceGateway
+                                   (POST /v3/invoices, GET /v3/invoices/{id})
+                                ↘ IFiscalInvoiceRepository → MySQL ou InMemory
+                                ↘ ICompanyRepository  (retenção de ISS do tomador)
+```
+
+`ChargeBatchService.ExecuteItemAsync` chama o serviço de nota logo depois de
+criar a cobrança do item, dentro de um `try/catch` próprio. Esse `catch`
+existe porque `ChargeBatchItem.MarkFailed` zera o identificador da cobrança:
+deixar uma falha de nota chegar ao `catch` do item apagaria um boleto real já
+cobrado.
+
+O registro da nota é gravado como `Issuing` **antes** da chamada externa, e a
+chave única `(billing_draft_id, sequence_number)` é a defesa final contra nota
+duplicada. O schema é a migration `009_add_fiscal_invoices`; a
+`010_add_company_iss_retention` acrescenta `retains_iss` a `companies` e semeia
+as empresas com evidência de retenção na produção.
+
 ## Integrações
 
 Evo usa Basic Auth com usuário e token do servidor. Endpoints confirmados para

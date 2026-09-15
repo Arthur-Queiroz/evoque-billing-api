@@ -218,6 +218,7 @@ public sealed class DatabaseSchemaInitializer(MySqlConnectionFactory connectionF
                 billing_draft_id CHAR(36) NOT NULL,
                 billing_period_id CHAR(36) NOT NULL,
                 sequence_number INT NOT NULL,
+                asaas_environment VARCHAR(16) NOT NULL,
                 asaas_payment_id VARCHAR(128) NOT NULL,
                 asaas_invoice_id VARCHAR(128) NULL,
                 status VARCHAR(32) NOT NULL,

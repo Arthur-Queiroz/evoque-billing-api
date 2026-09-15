@@ -94,10 +94,36 @@ public sealed class FiscalInvoiceServiceTests
     }
 
     /// <summary>
-    /// O Sandbox não emite NFS-e de verdade; tentar emitir lá só produziria ruído.
+    /// Quem decide é a configuração do ambiente, não o nome dele. Um ambiente
+    /// com a emissão desligada não tenta emitir e não deixa registro de falha:
+    /// a nota simplesmente não faz parte daquele lote.
     /// </summary>
     [Fact]
-    public async Task ExecuteAsync_SkipsTheInvoiceInSandbox()
+    public async Task ExecuteAsync_SkipsTheInvoiceWhenIssuanceIsDisabledForTheEnvironment()
+    {
+        var context = await CreateApprovedDraftAsync(asaasOptions: new AsaasOptions());
+
+        await ExecuteProductionBatchAsync(context);
+
+        Assert.Empty(await context.FiscalInvoiceRepository.ListByBillingPeriodIdAsync(
+            context.BillingPeriodId,
+            CancellationToken.None));
+        Assert.Equal(0, context.InvoiceGateway.ScheduleCallCount);
+
+        var auditLogs = await context.AuditLogRepository.ListByBillingDraftIdAsync(
+            context.BillingDraftId,
+            CancellationToken.None);
+        Assert.Contains(auditLogs, auditLog => auditLog.Action == "fiscal-invoice.skipped-disabled");
+    }
+
+    /// <summary>
+    /// O Sandbox aceita o mesmo POST /v3/invoices e a mesma lista de serviços
+    /// municipais da Produção, então é onde a emissão pode ser exercitada antes
+    /// de valer na prefeitura. A nota guarda o ambiente em que nasceu para que
+    /// sincronização e reemissão não troquem de conta.
+    /// </summary>
+    [Fact]
+    public async Task ExecuteAsync_IssuesInSandboxAndKeepsTheEnvironmentOnTheInvoice()
     {
         var context = await CreateApprovedDraftAsync();
 
@@ -109,15 +135,11 @@ public sealed class FiscalInvoiceServiceTests
                 [context.BillingDraftId]),
             CancellationToken.None);
 
-        Assert.Empty(await context.FiscalInvoiceRepository.ListByBillingPeriodIdAsync(
+        var fiscalInvoice = Assert.Single(await context.FiscalInvoiceRepository.ListByBillingPeriodIdAsync(
             context.BillingPeriodId,
             CancellationToken.None));
-        Assert.Equal(0, context.InvoiceGateway.ScheduleCallCount);
-
-        var auditLogs = await context.AuditLogRepository.ListByBillingDraftIdAsync(
-            context.BillingDraftId,
-            CancellationToken.None);
-        Assert.Contains(auditLogs, auditLog => auditLog.Action == "fiscal-invoice.skipped-sandbox");
+        Assert.Equal(AsaasEnvironment.Sandbox, fiscalInvoice.AsaasEnvironment);
+        Assert.Equal(AsaasEnvironment.Sandbox, Assert.Single(context.InvoiceGateway.ScheduledEnvironments));
     }
 
     /// <summary>
@@ -390,6 +412,7 @@ public sealed class FiscalInvoiceServiceTests
 
     private static async Task<TestContext> CreateApprovedDraftAsync(
         bool retainsIss = false,
+        AsaasOptions? asaasOptions = null,
         RecordingAsaasInvoiceGateway? invoiceGateway = null,
         IFiscalInvoiceRepository? fiscalInvoiceRepository = null)
     {
@@ -434,6 +457,7 @@ public sealed class FiscalInvoiceServiceTests
                 MunicipalServiceId = "82367",
                 IssTaxRate = 5.00m,
             }),
+            Options.Create(asaasOptions ?? IssuingEnabledAsaasOptions()),
             timeProvider);
         var chargeBatchService = new ChargeBatchService(
             billingPeriodRepository,
@@ -480,6 +504,33 @@ public sealed class FiscalInvoiceServiceTests
             billingPeriod.Id);
     }
 
+
+    /// <summary>
+    /// Emissão habilitada nos dois ambientes. Os testes exercitam a regra do
+    /// serviço, não a política de configuração — essa tem testes próprios em
+    /// AsaasOperationPolicyTests.
+    /// </summary>
+    private static AsaasOptions IssuingEnabledAsaasOptions()
+    {
+        return new AsaasOptions
+        {
+            Sandbox = new AsaasConnectionOptions
+            {
+                BaseUrl = "https://api-sandbox.asaas.com/v3/",
+                ApiKey = "chave-sandbox",
+                AllowChargeCreation = true,
+                AllowInvoiceIssuance = true,
+            },
+            Production = new AsaasConnectionOptions
+            {
+                BaseUrl = "https://api.asaas.com/v3/",
+                ApiKey = "chave-producao",
+                AllowChargeCreation = true,
+                AllowInvoiceIssuance = true,
+            },
+        };
+    }
+
     private sealed record TestContext(
         ChargeBatchService ChargeBatchService,
         FiscalInvoiceService FiscalInvoiceService,
@@ -495,6 +546,7 @@ public sealed class FiscalInvoiceServiceTests
         string statusOnGet = "AUTHORIZED") : IAsaasInvoiceGateway
     {
         private readonly List<AsaasInvoiceRequest> scheduledRequests = [];
+        private readonly List<AsaasEnvironment> scheduledEnvironments = [];
         private readonly List<string> queriedInvoiceIds = [];
         private string? currentFailureMessage = scheduleFailureMessage;
 
@@ -503,6 +555,8 @@ public sealed class FiscalInvoiceServiceTests
         public int GetCallCount { get; private set; }
 
         public IReadOnlyList<AsaasInvoiceRequest> ScheduledRequests => scheduledRequests;
+
+        public IReadOnlyList<AsaasEnvironment> ScheduledEnvironments => scheduledEnvironments;
 
         public IReadOnlyList<string> QueriedInvoiceIds => queriedInvoiceIds;
 
@@ -521,6 +575,7 @@ public sealed class FiscalInvoiceServiceTests
             }
 
             scheduledRequests.Add(request);
+            scheduledEnvironments.Add(asaasEnvironment);
             return Task.FromResult(new AsaasInvoiceCreation("inv_000022573933", "SCHEDULED"));
         }
 

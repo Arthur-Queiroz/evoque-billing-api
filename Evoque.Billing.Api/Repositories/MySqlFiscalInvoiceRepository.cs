@@ -6,7 +6,7 @@ namespace Evoque.Billing.Api.Repositories;
 public sealed class MySqlFiscalInvoiceRepository(MySqlConnectionFactory connectionFactory) : IFiscalInvoiceRepository
 {
     private const string SelectColumns = """
-        SELECT id, billing_draft_id, billing_period_id, sequence_number, asaas_payment_id,
+        SELECT id, billing_draft_id, billing_period_id, sequence_number, asaas_environment, asaas_payment_id,
                asaas_invoice_id, status, value, effective_date, retains_iss, service_description,
                error_message, created_at, updated_at
         FROM fiscal_invoices
@@ -16,11 +16,11 @@ public sealed class MySqlFiscalInvoiceRepository(MySqlConnectionFactory connecti
     {
         const string commandText = """
             INSERT INTO fiscal_invoices
-                (id, billing_draft_id, billing_period_id, sequence_number, asaas_payment_id,
+                (id, billing_draft_id, billing_period_id, sequence_number, asaas_environment, asaas_payment_id,
                  asaas_invoice_id, status, value, effective_date, retains_iss, service_description,
                  error_message, created_at, updated_at)
             VALUES
-                (@id, @billingDraftId, @billingPeriodId, @sequenceNumber, @asaasPaymentId,
+                (@id, @billingDraftId, @billingPeriodId, @sequenceNumber, @asaasEnvironment, @asaasPaymentId,
                  @asaasInvoiceId, @status, @value, @effectiveDate, @retainsIss, @serviceDescription,
                  @errorMessage, @createdAt, @updatedAt);
             """;
@@ -122,6 +122,7 @@ public sealed class MySqlFiscalInvoiceRepository(MySqlConnectionFactory connecti
         command.Parameters.AddWithValue("@billingDraftId", fiscalInvoice.BillingDraftId.ToString());
         command.Parameters.AddWithValue("@billingPeriodId", fiscalInvoice.BillingPeriodId.ToString());
         command.Parameters.AddWithValue("@sequenceNumber", fiscalInvoice.Sequence);
+        command.Parameters.AddWithValue("@asaasEnvironment", fiscalInvoice.AsaasEnvironment.ToString());
         command.Parameters.AddWithValue("@asaasPaymentId", fiscalInvoice.AsaasPaymentId);
         command.Parameters.AddWithValue("@asaasInvoiceId", (object?)fiscalInvoice.AsaasInvoiceId ?? DBNull.Value);
         command.Parameters.AddWithValue("@status", fiscalInvoice.Status.ToString());
@@ -141,6 +142,7 @@ public sealed class MySqlFiscalInvoiceRepository(MySqlConnectionFactory connecti
             reader.GetGuid("billing_draft_id"),
             reader.GetGuid("billing_period_id"),
             reader.GetInt32("sequence_number"),
+            Enum.Parse<AsaasEnvironment>(reader.GetString("asaas_environment")),
             reader.GetString("asaas_payment_id"),
             GetNullableString(reader, "asaas_invoice_id"),
             Enum.Parse<FiscalInvoiceStatus>(reader.GetString("status")),

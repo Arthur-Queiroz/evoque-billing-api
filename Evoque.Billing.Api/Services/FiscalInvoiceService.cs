@@ -19,6 +19,7 @@ public sealed class FiscalInvoiceService(
     IAuditLogRepository auditLogRepository,
     IAsaasInvoiceGateway asaasInvoiceGateway,
     IOptions<FiscalInvoiceOptions> fiscalInvoiceOptions,
+    IOptions<AsaasOptions> asaasOptions,
     TimeProvider timeProvider)
 {
     /// <summary>Confirmação exigida na reemissão, como nas demais operações mutáveis de produção.</summary>
@@ -31,14 +32,19 @@ public sealed class FiscalInvoiceService(
         AsaasEnvironment asaasEnvironment,
         CancellationToken cancellationToken)
     {
-        if (asaasEnvironment != AsaasEnvironment.Production)
+        // Quem decide é a configuração do ambiente, não o nome dele. O Sandbox
+        // aceita o mesmo POST /v3/invoices e a mesma lista de serviços
+        // municipais, então é onde a emissão pode ser exercitada antes de valer
+        // na prefeitura. Um ambiente com a emissão desligada não tenta e não
+        // deixa rastro de falha — a nota simplesmente não faz parte do lote.
+        if (!asaasOptions.Value.CanIssueInvoices(asaasEnvironment))
         {
             await RegisterAuditAsync(
-                "fiscal-invoice.skipped-sandbox",
+                "fiscal-invoice.skipped-disabled",
                 operatorId,
                 null,
                 billingDraftId,
-                "O Sandbox não emite NFS-e; nenhuma nota foi solicitada.",
+                $"A emissão de notas está desabilitada no ambiente {asaasEnvironment}; nenhuma nota foi solicitada.",
                 cancellationToken);
             return;
         }
@@ -58,6 +64,7 @@ public sealed class FiscalInvoiceService(
             billingDraft,
             asaasPaymentId,
             existingInvoices.Count + 1,
+            asaasEnvironment,
             operatorId,
             cancellationToken);
     }
@@ -108,7 +115,7 @@ public sealed class FiscalInvoiceService(
             }
 
             var invoiceState = await asaasInvoiceGateway.GetInvoiceAsync(
-                AsaasEnvironment.Production,
+                fiscalInvoice.AsaasEnvironment,
                 fiscalInvoice.AsaasInvoiceId,
                 cancellationToken);
             var previousStatus = fiscalInvoice.Status;
@@ -180,10 +187,13 @@ public sealed class FiscalInvoiceService(
                 "Esta prévia já possui uma nota fiscal mais recente que não está recusada.");
         }
 
+        // A reemissão volta ao mesmo ambiente da nota recusada. Reemitir em
+        // Produção uma nota criada no Sandbox mandaria um teste à prefeitura.
         var reissuedInvoice = await IssueAsync(
             billingDraft,
             refusedInvoice.AsaasPaymentId,
             existingInvoices.Count + 1,
+            refusedInvoice.AsaasEnvironment,
             request.OperatorId,
             cancellationToken);
         return FiscalInvoiceResponse.FromDomain(reissuedInvoice);
@@ -193,6 +203,7 @@ public sealed class FiscalInvoiceService(
         BillingDraft billingDraft,
         string asaasPaymentId,
         int sequence,
+        AsaasEnvironment asaasEnvironment,
         string operatorId,
         CancellationToken cancellationToken)
     {
@@ -214,6 +225,7 @@ public sealed class FiscalInvoiceService(
             billingDraft.Id,
             billingDraft.BillingPeriodId,
             sequence,
+            asaasEnvironment,
             asaasPaymentId,
             billingDraft.TotalAmount,
             effectiveDate,
@@ -242,7 +254,7 @@ public sealed class FiscalInvoiceService(
         try
         {
             var invoiceCreation = await asaasInvoiceGateway.ScheduleInvoiceAsync(
-                AsaasEnvironment.Production,
+                asaasEnvironment,
                 invoiceRequest,
                 cancellationToken);
             fiscalInvoice.MarkScheduled(invoiceCreation.InvoiceId, DateTimeOffset.UtcNow);

@@ -52,6 +52,43 @@ public sealed class AsaasOperationPolicyTests
                 connectionOptions));
     }
 
+    [Fact]
+    public void ValidateInvoiceIssuance_RefusesWhenTheFlagIsDisabled()
+    {
+        var connectionOptions = new AsaasConnectionOptions
+        {
+            BaseUrl = "https://api.asaas.com/v3/",
+            ApiKey = "chave-de-producao",
+            AllowChargeCreation = true,
+            AllowInvoiceIssuance = false,
+        };
+
+        var exception = Assert.Throws<ExternalOperationNotAllowedException>(() =>
+            AsaasOperationPolicy.ValidateInvoiceIssuance(
+                new TestHostEnvironment(Environments.Production),
+                AsaasEnvironment.Production,
+                connectionOptions));
+
+        Assert.Contains("emissão de notas fiscais", exception.Message);
+    }
+
+    [Fact]
+    public void ValidateInvoiceIssuance_AllowsProductionWhenTheFlagIsEnabled()
+    {
+        var connectionOptions = new AsaasConnectionOptions
+        {
+            BaseUrl = "https://api.asaas.com/v3/",
+            ApiKey = "chave-de-producao",
+            AllowChargeCreation = true,
+            AllowInvoiceIssuance = true,
+        };
+
+        AsaasOperationPolicy.ValidateInvoiceIssuance(
+            new TestHostEnvironment(Environments.Production),
+            AsaasEnvironment.Production,
+            connectionOptions);
+    }
+
     private sealed class TestHostEnvironment(string environmentName) : IHostEnvironment
     {
         public string EnvironmentName { get; set; } = environmentName;

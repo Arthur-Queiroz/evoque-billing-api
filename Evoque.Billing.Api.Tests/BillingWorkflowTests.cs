@@ -3,6 +3,7 @@ using Evoque.Billing.Api.Contracts;
 using Evoque.Billing.Api.Integrations.Asaas;
 using Evoque.Billing.Api.Repositories;
 using Evoque.Billing.Api.Services;
+using Microsoft.Extensions.Options;
 
 namespace Evoque.Billing.Api.Tests;
 
@@ -617,6 +618,11 @@ public sealed class BillingWorkflowTests
         var chargeBatchRepository = new InMemoryChargeBatchRepository(dataStore);
         var companyBillingScheduleRepository = new InMemoryCompanyBillingScheduleRepository(dataStore);
         var companyRepository = new InMemoryCompanyRepository(dataStore);
+
+        // Relógio fixo: os vencimentos dos cenários são datas fixas de 2026, e um
+        // TimeProvider real faria a suíte quebrar sozinha assim que o calendário
+        // ultrapassasse essas datas.
+        var timeProvider = new FixedTimeProvider(new DateTimeOffset(2026, 8, 1, 12, 0, 0, TimeSpan.Zero));
         var chargeCreationService = new ChargeCreationService(
             billingPeriodRepository,
             billingDraftRepository,
@@ -624,7 +630,20 @@ public sealed class BillingWorkflowTests
             notificationGateway ?? new RecordingAsaasCustomerNotificationGateway(
                 new AsaasCustomerEmailDeliveryReadiness(true, true)),
             asaasChargeGateway ?? new RecordingAsaasChargeGateway(),
-            TimeProvider.System);
+            timeProvider);
+        var fiscalInvoiceService = new FiscalInvoiceService(
+            billingPeriodRepository,
+            billingDraftRepository,
+            new InMemoryFiscalInvoiceRepository(dataStore),
+            companyRepository,
+            auditLogRepository,
+            new NoopAsaasInvoiceGateway(),
+            Options.Create(new FiscalInvoiceOptions
+            {
+                MunicipalServiceId = "82367",
+                IssTaxRate = 5.00m,
+            }),
+            timeProvider);
 
         var chargeBatchService = new ChargeBatchService(
             billingPeriodRepository,
@@ -632,7 +651,8 @@ public sealed class BillingWorkflowTests
             chargeBatchRepository,
             auditLogRepository,
             chargeCreationService,
-            TimeProvider.System);
+            fiscalInvoiceService,
+            timeProvider);
         var companyBillingScheduleService = new CompanyBillingScheduleService(
             companyBillingScheduleRepository,
             auditLogRepository);
@@ -693,6 +713,25 @@ public sealed class BillingWorkflowTests
             CancellationToken cancellationToken)
         {
             return Task.FromResult(readiness);
+        }
+    }
+
+    private sealed class NoopAsaasInvoiceGateway : IAsaasInvoiceGateway
+    {
+        public Task<AsaasInvoiceCreation> ScheduleInvoiceAsync(
+            AsaasEnvironment asaasEnvironment,
+            AsaasInvoiceRequest request,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new AsaasInvoiceCreation("inv_000000000001", "SCHEDULED"));
+        }
+
+        public Task<AsaasInvoiceState> GetInvoiceAsync(
+            AsaasEnvironment asaasEnvironment,
+            string asaasInvoiceId,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new AsaasInvoiceState(asaasInvoiceId, "AUTHORIZED", null));
         }
     }
 }

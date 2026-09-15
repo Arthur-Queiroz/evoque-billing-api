@@ -116,6 +116,38 @@ planilha do CRM 2.0 → empresa pagadora → CNPJ → cliente Asaas → dia
 - O Asaas envia o boleto/e-mail ao cliente cadastrado; o MVP não depende de
   Gmail ou OAuth do GCP.
 
+## Nota fiscal de serviço
+
+- A nota é emitida no mesmo lote autorizado que cria a cobrança, vinculada ao
+  `payment`, sem esperar o pagamento. É a prática já existente na conta: das 264
+  notas lidas da produção em 07/09/2026, praticamente todas saem de 2 a 12 dias
+  **antes** do vencimento, e há notas autorizadas para boletos ainda pendentes.
+- O valor da nota é o total da prévia aprovada, nunca o valor pago. Juros e
+  multa de boleto atrasado não são serviço prestado.
+- A configuração fiscal é única — serviço municipal `82367`, ISS de 5%, demais
+  tributos e deduções zerados — exceto a retenção de ISS, que é atributo do
+  tomador e vive no cadastro da empresa.
+- A prefeitura recusa a nota quando a retenção está errada **nos dois sentidos**.
+  Quatro empresas nascem com retenção ligada por evidência da produção; ARZ,
+  ALGT e Projeto Criando seguem pendentes de confirmação contábil.
+- **Falha na nota nunca invalida a cobrança.** O boleto já foi criado e cobrado
+  do cliente; marcar o item do lote como falho apagaria o identificador da
+  cobrança e deixaria um boleto real órfão. A recusa fica registrada na nota e
+  na auditoria, e o lote segue.
+- Uma prévia tem no máximo uma nota viva. Só uma nota recusada pode ser
+  reemitida, e a reemissão é recusada quando outra nota da mesma prévia já está
+  viva — uma nota recusada continua recusada para sempre, inclusive depois de
+  uma reemissão bem-sucedida.
+- A reemissão cria a sequência seguinte, usa a retenção de ISS atual da empresa
+  e exige a frase `CONFIRMAR`. É esse caminho que torna útil corrigir o cadastro
+  de uma empresa cuja nota foi recusada.
+- O Sandbox não emite NFS-e; a tentativa é registrada como ignorada.
+- A emissão exige `AllowInvoiceIssuance` habilitado, desligado por padrão, além
+  da política de ambiente já existente.
+- A sincronização de status é acionada pela tela, não por processo em segundo
+  plano. Emitir é automático; descobrir o desfecho não precisa ser — mas precisa
+  existir, porque notas recusadas já ficaram meses sem ninguém notar.
+
 ## Segurança e idempotência
 
 - Cada operação registra operador, data, ambiente e resultado.

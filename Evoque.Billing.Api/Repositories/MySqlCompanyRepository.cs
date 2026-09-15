@@ -13,7 +13,7 @@ public sealed class MySqlCompanyRepository(MySqlConnectionFactory connectionFact
              registry_lookup_status, registry_last_checked_at,
              is_active, source, last_imported_member_count, first_seen_at, last_seen_at,
              last_import_id, requires_review_after_reappearing,
-             asaas_sandbox_customer_id, asaas_production_customer_id,
+             asaas_sandbox_customer_id, asaas_production_customer_id, retains_iss,
              created_by, created_at, updated_by, updated_at)
         VALUES
             (@taxId, @displayName, @evoName, @legalName, @tradeName, @registrationStatus,
@@ -22,7 +22,7 @@ public sealed class MySqlCompanyRepository(MySqlConnectionFactory connectionFact
              @registryLookupStatus, @registryLastCheckedAt,
              @isActive, @source, @lastImportedMemberCount, @firstSeenAt, @lastSeenAt,
              @lastImportId, @requiresReviewAfterReappearing,
-             @asaasSandboxCustomerId, @asaasProductionCustomerId,
+             @asaasSandboxCustomerId, @asaasProductionCustomerId, @retainsIss,
              @createdBy, @createdAt, @updatedBy, @updatedAt)
         ON DUPLICATE KEY UPDATE
             display_name = VALUES(display_name),
@@ -48,6 +48,7 @@ public sealed class MySqlCompanyRepository(MySqlConnectionFactory connectionFact
             requires_review_after_reappearing = VALUES(requires_review_after_reappearing),
             asaas_sandbox_customer_id = VALUES(asaas_sandbox_customer_id),
             asaas_production_customer_id = VALUES(asaas_production_customer_id),
+            retains_iss = VALUES(retains_iss),
             updated_by = VALUES(updated_by),
             updated_at = VALUES(updated_at);
         """;
@@ -59,7 +60,7 @@ public sealed class MySqlCompanyRepository(MySqlConnectionFactory connectionFact
                registry_lookup_status, registry_last_checked_at,
                is_active, source, last_imported_member_count, first_seen_at, last_seen_at,
                last_import_id, requires_review_after_reappearing,
-               asaas_sandbox_customer_id, asaas_production_customer_id,
+               asaas_sandbox_customer_id, asaas_production_customer_id, retains_iss,
                created_by, created_at, updated_by, updated_at
         FROM companies
         """;
@@ -150,6 +151,7 @@ public sealed class MySqlCompanyRepository(MySqlConnectionFactory connectionFact
         command.Parameters.AddWithValue(
             "@asaasProductionCustomerId",
             (object?)company.AsaasProductionCustomerId ?? DBNull.Value);
+        command.Parameters.AddWithValue("@retainsIss", company.RetainsIss);
         command.Parameters.AddWithValue("@createdBy", company.CreatedBy);
         command.Parameters.AddWithValue("@createdAt", company.CreatedAt.UtcDateTime);
         command.Parameters.AddWithValue("@updatedBy", company.UpdatedBy);
@@ -179,6 +181,7 @@ public sealed class MySqlCompanyRepository(MySqlConnectionFactory connectionFact
             reader.GetBoolean("requires_review_after_reappearing"),
             ReadNullableString(reader, "asaas_sandbox_customer_id"),
             ReadNullableString(reader, "asaas_production_customer_id"),
+            reader.GetBoolean("retains_iss"),
             reader.GetString("created_by"),
             new DateTimeOffset(DateTime.SpecifyKind(reader.GetDateTime("created_at"), DateTimeKind.Utc)),
             reader.GetString("updated_by"),

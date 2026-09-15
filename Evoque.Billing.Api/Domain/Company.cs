@@ -109,6 +109,13 @@ public sealed class Company
 
     public string? AsaasProductionCustomerId { get; private set; }
 
+    /// <summary>
+    /// Quando verdadeiro, a nota fiscal desta empresa é emitida com ISS retido
+    /// pelo tomador. A prefeitura recusa a nota quando isso está errado, nos dois
+    /// sentidos, e o acerto é por empresa.
+    /// </summary>
+    public bool RetainsIss { get; private set; }
+
     public string CreatedBy { get; }
 
     public DateTimeOffset CreatedAt { get; }
@@ -180,6 +187,7 @@ public sealed class Company
         bool requiresReviewAfterReappearing,
         string? asaasSandboxCustomerId,
         string? asaasProductionCustomerId,
+        bool retainsIss,
         string createdBy,
         DateTimeOffset createdAt,
         string updatedBy,
@@ -200,6 +208,7 @@ public sealed class Company
             RequiresReviewAfterReappearing = requiresReviewAfterReappearing,
             AsaasSandboxCustomerId = asaasSandboxCustomerId,
             AsaasProductionCustomerId = asaasProductionCustomerId,
+            RetainsIss = retainsIss,
             UpdatedBy = updatedBy,
             UpdatedAt = updatedAt,
         };
@@ -298,6 +307,12 @@ public sealed class Company
         }
 
         RegisterUpdate(operatorId, linkedAt);
+    }
+
+    public void SetIssRetention(bool retainsIss, string operatorId, DateTimeOffset updatedAt)
+    {
+        RetainsIss = retainsIss;
+        RegisterUpdate(operatorId, updatedAt);
     }
 
     public void Deactivate(string operatorId, DateTimeOffset deactivatedAt)

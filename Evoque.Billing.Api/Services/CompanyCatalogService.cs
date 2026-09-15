@@ -159,6 +159,25 @@ public sealed class CompanyCatalogService(
         return await CreateResponseAsync(company, cancellationToken);
     }
 
+    public async Task<CompanyResponse> SetIssRetentionAsync(
+        string taxId,
+        SetCompanyIssRetentionRequest request,
+        CancellationToken cancellationToken)
+    {
+        var company = await RequireCompanyAsync(taxId, cancellationToken);
+        var updatedAt = DateTimeOffset.UtcNow;
+        company.SetIssRetention(request.RetainsIss, request.OperatorId, updatedAt);
+        await companyRepository.UpsertAsync(company, cancellationToken);
+        await RegisterAuditAsync(
+            "company.iss-retention-changed",
+            request.OperatorId,
+            updatedAt,
+            $"Empresa {CompanyTaxId.Format(company.TaxId)} passou a emitir nota "
+            + (request.RetainsIss ? "com ISS retido pelo tomador." : "sem retenção de ISS."),
+            cancellationToken);
+        return await CreateResponseAsync(company, cancellationToken);
+    }
+
     public async Task<CompanyResponse> RefreshRegistryAsync(
         string taxId,
         CompanyOperatorRequest request,

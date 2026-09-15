@@ -84,6 +84,17 @@ public sealed class CompaniesController(
         return Ok(company);
     }
 
+    [HttpPost("{taxId}/iss-retention")]
+    [ProducesResponseType<CompanyResponse>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<CompanyResponse>> SetIssRetentionAsync(
+        string taxId,
+        SetCompanyIssRetentionRequest request,
+        CancellationToken cancellationToken)
+    {
+        var company = await companyCatalogService.SetIssRetentionAsync(taxId, request, cancellationToken);
+        return Ok(company);
+    }
+
     [HttpPost("{taxId}/registry-refresh")]
     [ProducesResponseType<CompanyResponse>(StatusCodes.Status200OK)]
     public async Task<ActionResult<CompanyResponse>> RefreshRegistryAsync(

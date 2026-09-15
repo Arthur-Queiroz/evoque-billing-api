@@ -12,4 +12,5 @@ public sealed record AsaasEnvironmentStatusResponse(
     string Environment,
     bool IsConfigured,
     bool ReadOperationsEnabled,
-    bool ChargeCreationEnabled);
+    bool ChargeCreationEnabled,
+    bool InvoiceIssuanceEnabled);

@@ -427,6 +427,44 @@ public sealed class CompanyCatalogServiceTests
         Assert.Equal(439.60m, entry.TotalAmount);
     }
 
+    /// <summary>
+    /// CONTRACT e CIASUL tiveram todas as notas recusadas pela prefeitura de São
+    /// Caetano do Sul pedindo retenção de ISS. A retenção é atributo do tomador,
+    /// não da conta.
+    /// </summary>
+    [Fact]
+    public async Task SetIssRetentionAsync_TurnsRetentionOnAndOffForASingleCompany()
+    {
+        var catalog = CreateCatalog();
+        await catalog.Service.CreateAsync(
+            new CreateCompanyRequest(OpenSportsTaxId, "Open Sports", null, OperatorId),
+            CancellationToken.None);
+
+        var companyWithRetention = await catalog.Service.SetIssRetentionAsync(
+            OpenSportsTaxId,
+            new SetCompanyIssRetentionRequest(true, OperatorId),
+            CancellationToken.None);
+        Assert.True(companyWithRetention.RetainsIss);
+
+        var companyWithoutRetention = await catalog.Service.SetIssRetentionAsync(
+            OpenSportsTaxId,
+            new SetCompanyIssRetentionRequest(false, OperatorId),
+            CancellationToken.None);
+        Assert.False(companyWithoutRetention.RetainsIss);
+    }
+
+    [Fact]
+    public async Task CreateAsync_StartsWithoutIssRetention()
+    {
+        var catalog = CreateCatalog();
+
+        var company = await catalog.Service.CreateAsync(
+            new CreateCompanyRequest(OpenSportsTaxId, "Open Sports", null, OperatorId),
+            CancellationToken.None);
+
+        Assert.False(company.RetainsIss);
+    }
+
     [Fact]
     public async Task CatalogOperations_NeverCreateAnAsaasCharge()
     {

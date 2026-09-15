@@ -26,13 +26,15 @@ public sealed class IntegrationStatusService(
                 AsaasEnvironment.Sandbox.ToString(),
                 configuredAsaasOptions.IsConfigured(AsaasEnvironment.Sandbox),
                 configuredAsaasOptions.IsConfigured(AsaasEnvironment.Sandbox),
-                configuredAsaasOptions.CanCreateCharges(AsaasEnvironment.Sandbox)),
+                configuredAsaasOptions.CanCreateCharges(AsaasEnvironment.Sandbox),
+                configuredAsaasOptions.CanIssueInvoices(AsaasEnvironment.Sandbox)),
             new AsaasEnvironmentStatusResponse(
                 AsaasEnvironment.Production.ToString(),
                 configuredAsaasOptions.IsConfigured(AsaasEnvironment.Production),
                 hostEnvironment.IsProduction()
                     && configuredAsaasOptions.IsConfigured(AsaasEnvironment.Production),
-                configuredAsaasOptions.CanCreateCharges(AsaasEnvironment.Production)),
+                configuredAsaasOptions.CanCreateCharges(AsaasEnvironment.Production),
+                configuredAsaasOptions.CanIssueInvoices(AsaasEnvironment.Production)),
             evoIsConfigured,
             evoIsConfigured
                 ? "Integração Evo configurada."

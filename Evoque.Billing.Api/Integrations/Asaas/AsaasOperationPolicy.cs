@@ -34,6 +34,25 @@ public static class AsaasOperationPolicy
         }
     }
 
+    /// <summary>
+    /// Emitir nota fiscal é irreversível na prefeitura: cancelar depende dela e
+    /// já foi negado por competência encerrada. Por isso a emissão tem flag
+    /// própria, desligada por padrão, além da política de ambiente.
+    /// </summary>
+    public static void ValidateInvoiceIssuance(
+        IHostEnvironment hostEnvironment,
+        AsaasEnvironment asaasEnvironment,
+        AsaasConnectionOptions connectionOptions)
+    {
+        ValidateReadOperation(hostEnvironment, asaasEnvironment, connectionOptions);
+
+        if (!connectionOptions.AllowInvoiceIssuance)
+        {
+            throw new ExternalOperationNotAllowedException(
+                "A emissão de notas fiscais no Asaas está desabilitada pela configuração.");
+        }
+    }
+
     public static void ConfigureHttpClient(HttpClient httpClient, AsaasConnectionOptions connectionOptions)
     {
         if (string.IsNullOrWhiteSpace(connectionOptions.ApiKey))

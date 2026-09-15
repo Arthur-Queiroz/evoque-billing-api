@@ -140,7 +140,61 @@ publicados, a connection string e o endereço remetente autorizado.
 
 Enquanto não chegarem, a flag fica desligada e o sistema se comporta como hoje.
 
-### 2.3 Identificação de quem opera
+### 2.3 Simular nota fiscal fora da produção
+
+**Levantado na reunião de 15/09/2026. Comprovado possível no mesmo dia.**
+
+A pergunta foi se a nota fiscal pode ser exercitada sem depender de produção. A
+resposta é sim, e o código já suporta: desde o PR #12, quem decide se emite é a
+configuração por ambiente, não o nome dele. O Sandbox aceita o mesmo
+`POST /v3/invoices` e serve a mesma lista de serviços municipais.
+
+Isso corrigiu uma suposição errada do desenho original, que cravava no código
+que Sandbox nunca emite, sem que isso tivesse sido verificado.
+
+**Prova, executada em 15/09/2026 contra o Asaas Sandbox:**
+
+| Tentativa | Resposta |
+|---|---|
+| sem configuração | `invalid_fiscal_info` |
+| com dados fiscais | exige credencial da prefeitura |
+| com credencial fictícia | endereço do cliente incompleto |
+| com endereço completo | nota criada, `SCHEDULED` |
+| após `authorize` | `SYNCHRONIZED` e depois **`AUTHORIZED`** |
+
+A nota `inv_000000549258` saiu com número 549258, RPS 2, PDF, XML, ISS de 5% e
+o `externalReference` no padrão `billing-draft:`. A credencial de prefeitura era
+inventada, o que confirma que o ambiente é simulado e não alcança a prefeitura
+real.
+
+**O que falta para a simulação ficar disponível de rotina:**
+
+- a conta Sandbox precisa dos dados fiscais configurados (feito em 15/09);
+- precisa de credencial de prefeitura, que pode ser fictícia (feito);
+- **cada cliente espelho precisa de endereço completo**, e hoje só a Web Prado
+  tem. A sincronização Sandbox cria o espelho apenas com nome, CNPJ e e-mail.
+
+A terceira exige código: a criação do cliente espelho deveria preencher o
+endereço a partir do catálogo, que já o recebe da BrasilAPI.
+
+### 2.4 Endereço do tomador não é verificado antes de emitir
+
+**Descoberto ao simular, em 15/09/2026. Afeta produção.**
+
+O Asaas recusa a nota com *"Endereço do cliente incompleto.; CEP do cliente é
+inválido."* quando o tomador não tem endereço completo. É validação de NFS-e,
+não do Asaas.
+
+Em produção, `CompanyAsaasSynchronizationService` é somente leitura e **não
+preenche endereço**. Quando a emissão for ligada, qualquer empresa cujo cliente
+Asaas esteja incompleto vai falhar — e nada no software mostra isso antes.
+
+**O que falta:** conferir, antes de ligar a emissão, quantas das 39 empresas
+ativas têm endereço completo no Asaas de produção, e exibir essa pendência na
+tela de empresas. O catálogo já guarda o endereço vindo da BrasilAPI, então a
+informação existe do nosso lado.
+
+### 2.5 Identificação de quem opera
 
 **Levantado na auditoria de interface.**
 
@@ -293,5 +347,7 @@ Cada uma precisa de uma decisão: é cliente e falta cadastrar, ou não é.
 3. **2.1** — auditoria, levantada na reunião.
 4. **3.2** — elimina a conversão manual de planilha todo mês.
 5. **1.2** — cancelar prévia, que hoje só se resolve no banco.
-6. **2.3** — identificação do operador, que dá sentido à auditoria.
-7. **2.2** — e-mail pela Azure, bloqueado por credencial.
+6. **2.4** — endereço do tomador, que faz a emissão falhar em produção sem aviso.
+7. **2.5** — identificação do operador, que dá sentido à auditoria.
+8. **2.3** — completar a simulação, preenchendo o endereço do cliente espelho.
+9. **2.2** — e-mail pela Azure, bloqueado por credencial.

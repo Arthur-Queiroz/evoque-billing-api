@@ -7,6 +7,8 @@ Leia antes de alterar código:
 3. `.agents/specs/ARCHITECTURE.md`
 4. `.agents/specs/DEPLOYMENT.md` quando a alteração afetar containers, GitHub
    Actions ou variáveis de ambiente.
+5. `.agents/PENDENCIAS.md` para saber o que já está levantado antes de abrir
+   trabalho novo.
 
 ## Backend
 

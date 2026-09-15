@@ -14,6 +14,7 @@ public sealed class DatabaseSchemaInitializer(MySqlConnectionFactory connectionF
     private const string ClosingDayMigrationId = "008_rename_billing_day_to_closing_day";
     private const string FiscalInvoiceMigrationId = "009_add_fiscal_invoices";
     private const string CompanyIssRetentionMigrationId = "010_add_company_iss_retention";
+    private const string FiscalInvoiceEnvironmentMigrationId = "011_add_fiscal_invoice_environment";
 
     public async Task InitializeAsync(CancellationToken cancellationToken)
     {
@@ -194,6 +195,7 @@ public sealed class DatabaseSchemaInitializer(MySqlConnectionFactory connectionF
         await RenameBillingDayToClosingDayAsync(connection, cancellationToken);
         await CreateFiscalInvoiceTableAsync(connection, cancellationToken);
         await AddCompanyIssRetentionAsync(connection, cancellationToken);
+        await AddFiscalInvoiceEnvironmentAsync(connection, cancellationToken);
     }
 
     /// <summary>
@@ -218,7 +220,6 @@ public sealed class DatabaseSchemaInitializer(MySqlConnectionFactory connectionF
                 billing_draft_id CHAR(36) NOT NULL,
                 billing_period_id CHAR(36) NOT NULL,
                 sequence_number INT NOT NULL,
-                asaas_environment VARCHAR(16) NOT NULL,
                 asaas_payment_id VARCHAR(128) NOT NULL,
                 asaas_invoice_id VARCHAR(128) NULL,
                 status VARCHAR(32) NOT NULL,
@@ -241,6 +242,68 @@ public sealed class DatabaseSchemaInitializer(MySqlConnectionFactory connectionF
 
         await InsertMigrationAsync(connection, transaction, FiscalInvoiceMigrationId, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// A nota guarda o ambiente em que nasceu, para que sincronização e
+    /// reemissão voltem à mesma conta Asaas.
+    ///
+    /// Esta coluna chegou depois da `009` já ter sido aplicada em produção.
+    /// Acrescentá-la lá teria sido invisível: o inicializador pula uma migration
+    /// registrada, e a tabela ficaria sem a coluna enquanto o repositório já a
+    /// consultaria — foi o que derrubou a listagem de notas com erro 500.
+    /// </summary>
+    private static async Task AddFiscalInvoiceEnvironmentAsync(
+        MySqlConnection connection,
+        CancellationToken cancellationToken)
+    {
+        if (await IsAppliedAsync(connection, FiscalInvoiceEnvironmentMigrationId, cancellationToken))
+        {
+            return;
+        }
+
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        // A `009` ficou como produção a aplicou, sem a coluna, e é esta migration
+        // que a acrescenta — em banco novo e em banco existente. A checagem cobre
+        // um banco que tenha rodado a versão editada da `009`, que existiu por
+        // alguns minutos: sem ela, o ALTER derrubaria a subida da aplicação com
+        // "duplicate column".
+        if (!await ColumnExistsAsync(connection, transaction, "fiscal_invoices", "asaas_environment", cancellationToken))
+        {
+            await ExecuteAsync(connection, """
+                ALTER TABLE fiscal_invoices
+                ADD COLUMN asaas_environment VARCHAR(16) NOT NULL DEFAULT 'Production' AFTER sequence_number;
+                """, transaction, cancellationToken);
+        }
+
+        await InsertMigrationAsync(
+            connection,
+            transaction,
+            FiscalInvoiceEnvironmentMigrationId,
+            cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+    }
+
+    private static async Task<bool> ColumnExistsAsync(
+        MySqlConnection connection,
+        MySqlTransaction transaction,
+        string tableName,
+        string columnName,
+        CancellationToken cancellationToken)
+    {
+        const string commandText = """
+            SELECT COUNT(*)
+            FROM information_schema.columns
+            WHERE table_schema = DATABASE()
+              AND table_name = @tableName
+              AND column_name = @columnName;
+            """;
+
+        await using var command = new MySqlCommand(commandText, connection, transaction);
+        command.Parameters.AddWithValue("@tableName", tableName);
+        command.Parameters.AddWithValue("@columnName", columnName);
+        return Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken)) > 0;
     }
 
     /// <summary>

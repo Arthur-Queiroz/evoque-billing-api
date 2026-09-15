@@ -12,6 +12,7 @@ public sealed class FiscalInvoice
         Guid billingDraftId,
         Guid billingPeriodId,
         int sequence,
+        AsaasEnvironment asaasEnvironment,
         string asaasPaymentId,
         decimal totalAmount,
         DateOnly effectiveDate,
@@ -23,6 +24,7 @@ public sealed class FiscalInvoice
             billingDraftId,
             billingPeriodId,
             sequence,
+            asaasEnvironment,
             asaasPaymentId,
             null,
             FiscalInvoiceStatus.Issuing,
@@ -41,6 +43,7 @@ public sealed class FiscalInvoice
         Guid billingDraftId,
         Guid billingPeriodId,
         int sequence,
+        AsaasEnvironment asaasEnvironment,
         string asaasPaymentId,
         string? asaasInvoiceId,
         FiscalInvoiceStatus status,
@@ -86,6 +89,7 @@ public sealed class FiscalInvoice
         BillingDraftId = billingDraftId;
         BillingPeriodId = billingPeriodId;
         Sequence = sequence;
+        AsaasEnvironment = asaasEnvironment;
         AsaasPaymentId = asaasPaymentId;
         AsaasInvoiceId = asaasInvoiceId;
         Status = status;
@@ -105,6 +109,13 @@ public sealed class FiscalInvoice
     public Guid BillingPeriodId { get; }
 
     public int Sequence { get; }
+
+    /// <summary>
+    /// Ambiente em que a nota foi solicitada. Sincronização e reemissão precisam
+    /// voltar ao mesmo Asaas: consultar em Produção uma nota criada no Sandbox
+    /// leria a conta errada, e reemitir levaria à prefeitura uma nota de teste.
+    /// </summary>
+    public AsaasEnvironment AsaasEnvironment { get; }
 
     public string AsaasPaymentId { get; }
 
@@ -141,6 +152,7 @@ public sealed class FiscalInvoice
         Guid billingDraftId,
         Guid billingPeriodId,
         int sequence,
+        AsaasEnvironment asaasEnvironment,
         string asaasPaymentId,
         string? asaasInvoiceId,
         FiscalInvoiceStatus status,
@@ -157,6 +169,7 @@ public sealed class FiscalInvoice
             billingDraftId,
             billingPeriodId,
             sequence,
+            asaasEnvironment,
             asaasPaymentId,
             asaasInvoiceId,
             status,

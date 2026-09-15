@@ -643,6 +643,9 @@ public sealed class BillingWorkflowTests
                 MunicipalServiceId = "82367",
                 IssTaxRate = 5.00m,
             }),
+            // Emissão desligada: estes testes são do fluxo de cobrança, e uma
+            // nota tentando sair a cada lote só acrescentaria ruído.
+            Options.Create(new AsaasOptions()),
             timeProvider);
 
         var chargeBatchService = new ChargeBatchService(

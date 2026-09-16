@@ -474,15 +474,25 @@ correspondente — uma nota nasce sem documento.
 No **`Restore`**, acrescente os mesmos parâmetros depois de `errorMessage` e
 repasse-os ao construtor privado.
 
-- [ ] **Step 6: Rodar e confirmar que passa**
+- [ ] **Step 6: Confirmar que o único erro é o esperado**
 
 ```bash
 cd C:\prog\evoque\api
-dotnet test Evoque.Billing.slnx --filter "FullyQualifiedName~FiscalInvoiceTests"
+dotnet build Evoque.Billing.slnx --no-restore
 ```
 
-Esperado: PASS. A suíte completa ainda falha em `MySqlFiscalInvoiceRepository`,
-que a Task 4 corrige.
+Esperado: **um único erro**, em `MySqlFiscalInvoiceRepository.cs`, dizendo que
+`Restore` espera 17 argumentos e recebeu 15. É a Task 5 que o corrige.
+
+Filtrar testes aqui não adianta: o projeto de teste referencia o projeto da API,
+então enquanto a API não compilar o `dotnet test` não roda teste nenhum,
+filtrado ou não. Conferir que o erro é só esse, e é o previsto, é a verificação
+possível nesta etapa.
+
+Se quiser confirmar a lógica do domínio antes de seguir, acrescente
+temporariamente `null, null` à chamada de `Restore` em
+`MySqlFiscalInvoiceRepository.cs:140`, rode a suíte, e **reverta o arquivo com
+`git checkout --` antes de commitar** — a Task 5 é dona dele.
 
 - [ ] **Step 7: Commit**
 
@@ -667,6 +677,9 @@ Claude-Session: https://claude.ai/code/session_01NJLspFgTbgJoemNRZRDwqX"
 ---
 
 ### Task 5: Persistência e migration 012
+
+> **Ordem:** execute esta task **antes da Task 4**. A Task 3 deixa o projeto sem
+> compilar, e é esta que restaura. As duas são independentes entre si.
 
 **Files:**
 - Modify: `Evoque.Billing.Api/Repositories/MySqlFiscalInvoiceRepository.cs`

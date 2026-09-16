@@ -109,18 +109,66 @@ O fluxo do operador passa a ser: executa o lote em Teste, a nota aparece como
 "Agendada", ele clica em "Atualizar situação", ela vira "Emitida" e o link
 aparece.
 
-## A verificar durante a implementação
+## Verificado em 15/09/2026
 
-No teste manual a nota só chegou a `AUTHORIZED` depois de uma chamada explícita
-a `POST /invoices/{id}/authorize`. Não foi confirmado se ela chegaria sozinha —
-a data efetiva era o próprio dia, então é provável, mas não verificado.
+A pergunta em aberto era se a nota chega a `AUTHORIZED` sozinha no Sandbox, ou
+se depende de `POST /invoices/{id}/authorize`.
 
-Se não chegar, o operador ficaria olhando "Agendada" indefinidamente no Sandbox.
-Nesse caso, a decisão a tomar é se o botão "Atualizar situação" deve antecipar a
-autorização **apenas em Sandbox**, mantendo a produção intocada.
+**Ela chega sozinha.** Nenhuma chamada a `authorize` é necessária, e a decisão
+de não antecipar a autorização permanece.
 
-Isso precisa ser verificado antes de a implementação ser dada como pronta, não
-depois.
+Verificação ponta a ponta com a Fito Pharmacos, competência 11/2026:
+
+```text
+lote executado            -> boleto pay_uwqbb3aib0w4rk08 criado
+nota solicitada           -> inv_000000549777, Scheduled
+~5 min                    -> ainda Scheduled
+~6 min                    -> SYNCHRONIZED
+~7 min                    -> AUTHORIZED, numero 549777
+```
+
+A chamada manual a `authorize` no meio do caminho devolveu **400**: a nota já
+estava em processamento. Foi o que induziu ao erro na primeira observação
+manual, que atribuiu a ela um avanço que teria acontecido de qualquer forma.
+
+O sistema capturou o desfecho corretamente pela sincronização:
+
+```json
+{
+  "status": "Authorized",
+  "asaasInvoiceId": "inv_000000549777",
+  "totalAmount": 179.70,
+  "pdfUrl": "https://sandbox.asaas.com/file/public/download/...",
+  "xmlUrl": "https://sandbox.asaas.com/file/public/download/..."
+}
+```
+
+O PDF responde `HTTP 200`, `application/pdf`, 16,1 KB.
+
+**Implicação para a tela:** o operador precisa clicar em "Atualizar situação"
+mais de uma vez, ou esperar alguns minutos antes do primeiro clique. A nota não
+fica pronta imediatamente após a execução do lote. Isso não é defeito, mas
+convém que a tela não dê a entender que "Agendada" é um estado final.
+
+### Achado paralelo: o cadastro público nunca respondia
+
+A primeira tentativa desta verificação falhou com `Endereço do cliente
+incompleto.; CEP do cliente é inválido.` porque a empresa não tinha endereço —
+e nenhuma das 39 empresas ativas tinha, desde 31/07.
+
+A causa não era timeout, limite de IP nem indisponibilidade da BrasilAPI: o
+`BrasilApiCompanyRegistryGateway` não enviava `User-Agent`, e a BrasilAPI recusa
+essa requisição com `429`. Isolado com controle nos dois sentidos, no mesmo IP e
+no mesmo minuto:
+
+```text
+com User-Agent  -> HTTP 200
+sem User-Agent  -> HTTP 429
+com User-Agent  -> HTTP 200
+```
+
+Corrigido no commit `371bfe1`. Sem essa correção, **toda** empresa falharia ao
+emitir nota em produção, porque o Asaas exige endereço do tomador.
 
 ## Erros
 

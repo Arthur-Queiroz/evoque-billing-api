@@ -225,6 +225,49 @@ public sealed class FiscalInvoiceTests
             fiscalInvoice.MarkFailed("Falha qualquer.", CreatedAt.AddMinutes(2)));
     }
 
+    [Fact]
+    public void AttachDocuments_StoresTheLinksAsaasReturned()
+    {
+        var fiscalInvoice = CreateFiscalInvoice();
+        fiscalInvoice.MarkScheduled("inv_000000549258", CreatedAt.AddMinutes(1));
+
+        fiscalInvoice.AttachDocuments(
+            "https://www.asaas.com/file/public/download/pdf",
+            "https://www.asaas.com/file/public/download/xml",
+            CreatedAt.AddMinutes(2));
+
+        Assert.Equal("https://www.asaas.com/file/public/download/pdf", fiscalInvoice.PdfUrl);
+        Assert.Equal("https://www.asaas.com/file/public/download/xml", fiscalInvoice.XmlUrl);
+        Assert.True(fiscalInvoice.HasDocuments);
+    }
+
+    /// <summary>
+    /// Uma nota agendada ainda não tem documento. Uma sincronização que volta
+    /// sem as URLs não pode apagar as que já foram guardadas.
+    /// </summary>
+    [Fact]
+    public void AttachDocuments_KeepsWhatWasAlreadyStoredWhenAsaasReturnsNothing()
+    {
+        var fiscalInvoice = CreateFiscalInvoice();
+        fiscalInvoice.MarkScheduled("inv_000000549258", CreatedAt.AddMinutes(1));
+        fiscalInvoice.AttachDocuments("https://pdf", "https://xml", CreatedAt.AddMinutes(2));
+
+        fiscalInvoice.AttachDocuments(null, null, CreatedAt.AddMinutes(3));
+
+        Assert.Equal("https://pdf", fiscalInvoice.PdfUrl);
+        Assert.Equal("https://xml", fiscalInvoice.XmlUrl);
+    }
+
+    [Fact]
+    public void HasDocuments_IsFalseWhileTheInvoiceHasNoLinks()
+    {
+        var fiscalInvoice = CreateFiscalInvoice();
+
+        Assert.False(fiscalInvoice.HasDocuments);
+        Assert.Null(fiscalInvoice.PdfUrl);
+        Assert.Null(fiscalInvoice.XmlUrl);
+    }
+
     private static FiscalInvoice CreateFiscalInvoice()
     {
         return new FiscalInvoice(

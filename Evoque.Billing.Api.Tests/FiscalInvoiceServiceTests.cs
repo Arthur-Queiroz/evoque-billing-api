@@ -277,6 +277,51 @@ public sealed class FiscalInvoiceServiceTests
     }
 
     [Fact]
+    public async Task SynchronizeAsync_StoresTheDocumentsAsaasReturned()
+    {
+        var context = await CreateApprovedDraftAsync();
+        await ExecuteProductionBatchAsync(context);
+        context.InvoiceGateway.ReturnDocumentsOnGet("https://asaas/pdf", "https://asaas/xml");
+
+        await context.FiscalInvoiceService.SynchronizeAsync(
+            new BillingPeriodReference(2026, 8),
+            OperatorId,
+            CancellationToken.None);
+
+        var fiscalInvoice = Assert.Single(
+            await context.FiscalInvoiceRepository.ListByBillingPeriodIdAsync(
+                context.BillingPeriodId,
+                CancellationToken.None));
+        Assert.Equal("https://asaas/pdf", fiscalInvoice.PdfUrl);
+        Assert.Equal("https://asaas/xml", fiscalInvoice.XmlUrl);
+    }
+
+    /// <summary>
+    /// Regressão: o laço pulava a persistência quando o status não mudava. Se os
+    /// documentos chegassem nessa passagem, seriam descartados.
+    /// </summary>
+    [Fact]
+    public async Task SynchronizeAsync_StoresDocumentsEvenWhenTheStatusDoesNotChange()
+    {
+        var context = await CreateApprovedDraftAsync(
+            invoiceGateway: new RecordingAsaasInvoiceGateway(statusOnGet: "SCHEDULED"));
+        await ExecuteProductionBatchAsync(context);
+        context.InvoiceGateway.ReturnDocumentsOnGet("https://asaas/pdf", null);
+
+        await context.FiscalInvoiceService.SynchronizeAsync(
+            new BillingPeriodReference(2026, 8),
+            OperatorId,
+            CancellationToken.None);
+
+        var fiscalInvoice = Assert.Single(
+            await context.FiscalInvoiceRepository.ListByBillingPeriodIdAsync(
+                context.BillingPeriodId,
+                CancellationToken.None));
+        Assert.Equal(FiscalInvoiceStatus.Scheduled, fiscalInvoice.Status);
+        Assert.Equal("https://asaas/pdf", fiscalInvoice.PdfUrl);
+    }
+
+    [Fact]
     public async Task ReissueAsync_RequiresTheConfirmationPhrase()
     {
         var context = await CreateApprovedDraftAsync(
@@ -549,6 +594,8 @@ public sealed class FiscalInvoiceServiceTests
         private readonly List<AsaasEnvironment> scheduledEnvironments = [];
         private readonly List<string> queriedInvoiceIds = [];
         private string? currentFailureMessage = scheduleFailureMessage;
+        private string? pdfUrlOnGet;
+        private string? xmlUrlOnGet;
 
         public int ScheduleCallCount { get; private set; }
 
@@ -562,6 +609,12 @@ public sealed class FiscalInvoiceServiceTests
 
         /// <summary>Simula a empresa corrigindo o cadastro depois da recusa da prefeitura.</summary>
         public void StopFailing() => currentFailureMessage = null;
+
+        public void ReturnDocumentsOnGet(string? pdfUrl, string? xmlUrl)
+        {
+            pdfUrlOnGet = pdfUrl;
+            xmlUrlOnGet = xmlUrl;
+        }
 
         public Task<AsaasInvoiceCreation> ScheduleInvoiceAsync(
             AsaasEnvironment asaasEnvironment,
@@ -586,7 +639,7 @@ public sealed class FiscalInvoiceServiceTests
         {
             GetCallCount++;
             queriedInvoiceIds.Add(asaasInvoiceId);
-            return Task.FromResult(new AsaasInvoiceState(asaasInvoiceId, statusOnGet, null, null, null));
+            return Task.FromResult(new AsaasInvoiceState(asaasInvoiceId, statusOnGet, null, pdfUrlOnGet, xmlUrlOnGet));
         }
     }
 

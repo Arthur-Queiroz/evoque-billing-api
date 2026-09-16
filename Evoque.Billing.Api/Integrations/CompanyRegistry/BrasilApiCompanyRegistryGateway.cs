@@ -29,6 +29,12 @@ public sealed class BrasilApiCompanyRegistryGateway : ICompanyRegistryGateway
         this.httpClient.BaseAddress = new Uri(
             options.BaseUrl.EndsWith('/') ? options.BaseUrl : $"{options.BaseUrl}/");
         this.httpClient.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
+
+        // A BrasilAPI recusa requisições sem User-Agent com HTTP 429, que este
+        // gateway lê como "o cadastro público limitou as consultas". Sem este
+        // cabeçalho, todo CNPJ consultado voltava `Unavailable` e o catálogo
+        // inteiro ficava sem endereço.
+        this.httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("EvoqueBilling/0.1");
     }
 
     public async Task<CompanyRegistryLookupResult> FindByTaxIdAsync(

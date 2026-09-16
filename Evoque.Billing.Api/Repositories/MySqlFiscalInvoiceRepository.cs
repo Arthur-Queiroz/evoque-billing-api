@@ -8,7 +8,7 @@ public sealed class MySqlFiscalInvoiceRepository(MySqlConnectionFactory connecti
     private const string SelectColumns = """
         SELECT id, billing_draft_id, billing_period_id, sequence_number, asaas_environment, asaas_payment_id,
                asaas_invoice_id, status, value, effective_date, retains_iss, service_description,
-               error_message, created_at, updated_at
+               error_message, pdf_url, xml_url, created_at, updated_at
         FROM fiscal_invoices
         """;
 
@@ -18,11 +18,11 @@ public sealed class MySqlFiscalInvoiceRepository(MySqlConnectionFactory connecti
             INSERT INTO fiscal_invoices
                 (id, billing_draft_id, billing_period_id, sequence_number, asaas_environment, asaas_payment_id,
                  asaas_invoice_id, status, value, effective_date, retains_iss, service_description,
-                 error_message, created_at, updated_at)
+                 error_message, pdf_url, xml_url, created_at, updated_at)
             VALUES
                 (@id, @billingDraftId, @billingPeriodId, @sequenceNumber, @asaasEnvironment, @asaasPaymentId,
                  @asaasInvoiceId, @status, @value, @effectiveDate, @retainsIss, @serviceDescription,
-                 @errorMessage, @createdAt, @updatedAt);
+                 @errorMessage, @pdfUrl, @xmlUrl, @createdAt, @updatedAt);
             """;
 
         await using var connection = connectionFactory.CreateConnection();
@@ -51,6 +51,8 @@ public sealed class MySqlFiscalInvoiceRepository(MySqlConnectionFactory connecti
             SET asaas_invoice_id = @asaasInvoiceId,
                 status = @status,
                 error_message = @errorMessage,
+                pdf_url = @pdfUrl,
+                xml_url = @xmlUrl,
                 updated_at = @updatedAt
             WHERE id = @id;
             """;
@@ -62,6 +64,8 @@ public sealed class MySqlFiscalInvoiceRepository(MySqlConnectionFactory connecti
         command.Parameters.AddWithValue("@asaasInvoiceId", (object?)fiscalInvoice.AsaasInvoiceId ?? DBNull.Value);
         command.Parameters.AddWithValue("@status", fiscalInvoice.Status.ToString());
         command.Parameters.AddWithValue("@errorMessage", (object?)fiscalInvoice.ErrorMessage ?? DBNull.Value);
+        command.Parameters.AddWithValue("@pdfUrl", (object?)fiscalInvoice.PdfUrl ?? DBNull.Value);
+        command.Parameters.AddWithValue("@xmlUrl", (object?)fiscalInvoice.XmlUrl ?? DBNull.Value);
         command.Parameters.AddWithValue("@updatedAt", fiscalInvoice.UpdatedAt.UtcDateTime);
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
@@ -131,6 +135,8 @@ public sealed class MySqlFiscalInvoiceRepository(MySqlConnectionFactory connecti
         command.Parameters.AddWithValue("@retainsIss", fiscalInvoice.RetainsIss);
         command.Parameters.AddWithValue("@serviceDescription", fiscalInvoice.ServiceDescription);
         command.Parameters.AddWithValue("@errorMessage", (object?)fiscalInvoice.ErrorMessage ?? DBNull.Value);
+        command.Parameters.AddWithValue("@pdfUrl", (object?)fiscalInvoice.PdfUrl ?? DBNull.Value);
+        command.Parameters.AddWithValue("@xmlUrl", (object?)fiscalInvoice.XmlUrl ?? DBNull.Value);
         command.Parameters.AddWithValue("@createdAt", fiscalInvoice.CreatedAt.UtcDateTime);
         command.Parameters.AddWithValue("@updatedAt", fiscalInvoice.UpdatedAt.UtcDateTime);
     }
@@ -151,6 +157,8 @@ public sealed class MySqlFiscalInvoiceRepository(MySqlConnectionFactory connecti
             reader.GetBoolean("retains_iss"),
             reader.GetString("service_description"),
             GetNullableString(reader, "error_message"),
+            GetNullableString(reader, "pdf_url"),
+            GetNullableString(reader, "xml_url"),
             GetUtcDateTime(reader, "created_at"),
             GetUtcDateTime(reader, "updated_at"));
     }

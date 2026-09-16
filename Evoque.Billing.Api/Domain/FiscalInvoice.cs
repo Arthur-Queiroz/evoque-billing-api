@@ -149,7 +149,7 @@ public sealed class FiscalInvoice
 
     public string? XmlUrl { get; private set; }
 
-    public bool HasDocuments => !string.IsNullOrWhiteSpace(PdfUrl);
+    public bool HasDocuments => !string.IsNullOrWhiteSpace(PdfUrl) || !string.IsNullOrWhiteSpace(XmlUrl);
 
     public DateTimeOffset CreatedAt { get; }
 
@@ -261,8 +261,10 @@ public sealed class FiscalInvoice
     /// o status muda antes de existir documento, e uma consulta posterior pode
     /// trazer o documento sem que o status mude.
     ///
-    /// Uma resposta sem URL não apaga o que já foi guardado — o Asaas só
-    /// devolve os links depois de autorizar.
+    /// PDF e XML são preservados independentemente um do outro: cada um só é
+    /// sobrescrito se vier preenchido, e nenhum apaga o outro. Na prática o
+    /// Asaas parece devolver os dois juntos, mas isso nunca foi verificado, e
+    /// esta guarda não pode depender dessa suposição.
     /// </summary>
     public void AttachDocuments(string? pdfUrl, string? xmlUrl, DateTimeOffset updatedAt)
     {

@@ -268,6 +268,28 @@ public sealed class FiscalInvoiceTests
         Assert.Null(fiscalInvoice.XmlUrl);
     }
 
+    /// <summary>
+    /// PDF e XML são guardados de forma independente. Um dos dois chegando
+    /// sozinho não pode zerar o outro nem ser ignorado.
+    /// </summary>
+    [Fact]
+    public void AttachDocuments_UpdatesOnlyTheLinkThatArrived()
+    {
+        var fiscalInvoice = CreateFiscalInvoice();
+        fiscalInvoice.MarkScheduled("inv_000000549258", CreatedAt.AddMinutes(1));
+
+        fiscalInvoice.AttachDocuments("https://pdf", null, CreatedAt.AddMinutes(2));
+
+        Assert.Equal("https://pdf", fiscalInvoice.PdfUrl);
+        Assert.Null(fiscalInvoice.XmlUrl);
+        Assert.True(fiscalInvoice.HasDocuments);
+
+        fiscalInvoice.AttachDocuments(null, "https://xml", CreatedAt.AddMinutes(3));
+
+        Assert.Equal("https://pdf", fiscalInvoice.PdfUrl);
+        Assert.Equal("https://xml", fiscalInvoice.XmlUrl);
+    }
+
     private static FiscalInvoice CreateFiscalInvoice()
     {
         return new FiscalInvoice(

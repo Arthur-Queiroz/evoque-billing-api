@@ -19,6 +19,7 @@ public interface IAsaasCustomerGateway
         string name,
         string taxId,
         string email,
+        CompanyRegistryAddress? registryAddress,
         CancellationToken cancellationToken);
 }
 

@@ -734,7 +734,7 @@ public sealed class BillingWorkflowTests
             string asaasInvoiceId,
             CancellationToken cancellationToken)
         {
-            return Task.FromResult(new AsaasInvoiceState(asaasInvoiceId, "AUTHORIZED", null));
+            return Task.FromResult(new AsaasInvoiceState(asaasInvoiceId, "AUTHORIZED", null, null, null));
         }
     }
 }

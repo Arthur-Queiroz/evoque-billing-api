@@ -586,7 +586,7 @@ public sealed class FiscalInvoiceServiceTests
         {
             GetCallCount++;
             queriedInvoiceIds.Add(asaasInvoiceId);
-            return Task.FromResult(new AsaasInvoiceState(asaasInvoiceId, statusOnGet, null));
+            return Task.FromResult(new AsaasInvoiceState(asaasInvoiceId, statusOnGet, null, null, null));
         }
     }
 

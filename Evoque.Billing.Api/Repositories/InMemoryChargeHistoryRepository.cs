@@ -15,6 +15,10 @@ public sealed class InMemoryChargeHistoryRepository(InMemoryBillingDataStore dat
         var entries = new List<ChargeHistoryEntry>();
         foreach (var chargeBatch in dataStore.ChargeBatches.Values)
         {
+            // Defensivo, não um caminho esperado: um lote sempre referencia uma
+            // competência existente. Se isto disparar, a linha some do histórico
+            // sem nenhum rastro — é a primeira pista para quem for investigar um
+            // "sumiu do histórico".
             if (!billingPeriodsById.TryGetValue(chargeBatch.BillingPeriodId, out var billingPeriod))
             {
                 continue;
@@ -22,6 +26,9 @@ public sealed class InMemoryChargeHistoryRepository(InMemoryBillingDataStore dat
 
             foreach (var chargeBatchItem in chargeBatch.Items)
             {
+                // Mesma natureza defensiva do skip acima: um item de lote sempre
+                // referencia uma prévia existente. Um disparo aqui também apaga
+                // uma linha do histórico em silêncio.
                 if (!dataStore.BillingDrafts.TryGetValue(chargeBatchItem.BillingDraftId, out var billingDraft))
                 {
                     continue;
@@ -54,12 +61,12 @@ public sealed class InMemoryChargeHistoryRepository(InMemoryBillingDataStore dat
         }
 
         return Task.FromResult<IReadOnlyCollection<ChargeHistoryEntry>>(
-            Filtrar(entries, filter)
+            ApplyFilter(entries, filter)
                 .OrderByDescending(entry => entry.IssuedAt)
                 .ToArray());
     }
 
-    private static IEnumerable<ChargeHistoryEntry> Filtrar(
+    private static IEnumerable<ChargeHistoryEntry> ApplyFilter(
         IEnumerable<ChargeHistoryEntry> entries,
         ChargeHistoryFilter filter)
     {

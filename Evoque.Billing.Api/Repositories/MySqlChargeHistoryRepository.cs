@@ -104,8 +104,7 @@ public sealed class MySqlChargeHistoryRepository(MySqlConnectionFactory connecti
         {
             if (filter.SearchesByTaxId)
             {
-                var digitsOnly = new string(filter.CompanySearch.Where(char.IsAsciiDigit).ToArray());
-                command.Parameters.AddWithValue("@companyTaxIdSearch", $"%{digitsOnly}%");
+                command.Parameters.AddWithValue("@companyTaxIdSearch", $"%{filter.CompanyTaxIdDigits}%");
             }
             else
             {

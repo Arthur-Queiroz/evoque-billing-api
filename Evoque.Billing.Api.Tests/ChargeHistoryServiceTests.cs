@@ -72,6 +72,27 @@ public sealed class ChargeHistoryServiceTests
     }
 
     /// <summary>
+    /// Um termo feito só de pontuação de CNPJ, sem nenhum dígito (ex.: "-"),
+    /// não pode ser tratado como busca por CNPJ: <c>SearchesByTaxId</c> exige
+    /// ao menos um dígito. Sem essa exigência, o termo era CNPJ-shaped com zero
+    /// dígitos, e as duas implementações discordavam sobre o que fazer com uma
+    /// extração vazia — a de memória devolvia lista vazia e a MySQL, por casar
+    /// `LIKE '%%'` com tudo, devolveria o histórico inteiro. Este teste finca a
+    /// interpretação correta: um termo assim é busca por nome.
+    /// </summary>
+    [Fact]
+    public async Task ListAsync_TreatsAPunctuationOnlySearchAsAName()
+    {
+        var scenario = await CreateScenarioWithAHyphenatedCompanyNameAsync();
+
+        var historico = await scenario.Service.ListAsync(
+            new ChargeHistoryQuery(Search: "-"),
+            CancellationToken.None);
+
+        Assert.Equal("Farmava - Matriz", Assert.Single(historico).CompanyName);
+    }
+
+    /// <summary>
     /// A regra de dobra de acento é o ponto mais frágil entre a implementação em
     /// memória e a futura implementação MySQL: o banco ganha isso de graça pela
     /// collation `utf8mb4_0900_ai_ci`, e este teste é o que impede a versão em
@@ -244,6 +265,30 @@ public sealed class ChargeHistoryServiceTests
             dataStore, billingDraftRepository, chargeBatchRepository,
             setembro, "12345678000195", "Farmácia Açúcar", 150.00m, AsaasEnvironment.Sandbox,
             new DateOnly(2026, 9, 28), "pay_farmacia_acucar", new DateTimeOffset(2026, 9, 15, 0, 0, 0, TimeSpan.Zero));
+
+        return new TestScenario(
+            new ChargeHistoryService(new InMemoryChargeHistoryRepository(dataStore)),
+            dataStore);
+    }
+
+    /// <summary>
+    /// Cenário dedicado à regressão de termo só-pontuação: uma única empresa
+    /// cujo nome contém um hífen, sem nota fiscal envolvida.
+    /// </summary>
+    private static async Task<TestScenario> CreateScenarioWithAHyphenatedCompanyNameAsync()
+    {
+        var dataStore = new InMemoryBillingDataStore();
+        var billingPeriodRepository = new InMemoryBillingPeriodRepository(dataStore);
+        var billingDraftRepository = new InMemoryBillingDraftRepository(dataStore);
+        var chargeBatchRepository = new InMemoryChargeBatchRepository(dataStore);
+
+        var setembro = new BillingPeriod(new BillingPeriodReference(2026, 9), DateTimeOffset.UtcNow);
+        await billingPeriodRepository.AddAsync(setembro, CancellationToken.None);
+
+        await CriarCobrancaAsync(
+            dataStore, billingDraftRepository, chargeBatchRepository,
+            setembro, "12345678000195", "Farmava - Matriz", 150.00m, AsaasEnvironment.Sandbox,
+            new DateOnly(2026, 9, 28), "pay_farmava_matriz", new DateTimeOffset(2026, 9, 15, 0, 0, 0, TimeSpan.Zero));
 
         return new TestScenario(
             new ChargeHistoryService(new InMemoryChargeHistoryRepository(dataStore)),

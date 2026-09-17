@@ -88,7 +88,7 @@ public sealed class InMemoryChargeHistoryRepository(InMemoryBillingDataStore dat
             // ChargeHistoryFilter.SearchesByTaxId para que esta implementação e
             // a MySQL nunca divirjam sobre o que é CNPJ e o que é nome.
             entries = filter.SearchesByTaxId
-                ? FilterByTaxId(entries, searchTerm)
+                ? FilterByTaxId(entries, filter.CompanyTaxIdDigits)
                 : FilterByCompanyName(entries, searchTerm);
         }
 
@@ -97,12 +97,11 @@ public sealed class InMemoryChargeHistoryRepository(InMemoryBillingDataStore dat
 
     private static IEnumerable<ChargeHistoryEntry> FilterByTaxId(
         IEnumerable<ChargeHistoryEntry> entries,
-        string searchTerm)
+        string digitsOnly)
     {
-        var digitsOnly = new string(searchTerm.Where(char.IsAsciiDigit).ToArray());
-        return digitsOnly.Length == 0
-            ? []
-            : entries.Where(entry => entry.CompanyTaxId.Contains(digitsOnly, StringComparison.Ordinal));
+        // Nenhum guarda para dígitos vazios: SearchesByTaxId já exige ao menos
+        // um dígito antes de chegar aqui, então digitsOnly nunca é vazio.
+        return entries.Where(entry => entry.CompanyTaxId.Contains(digitsOnly, StringComparison.Ordinal));
     }
 
     private static IEnumerable<ChargeHistoryEntry> FilterByCompanyName(

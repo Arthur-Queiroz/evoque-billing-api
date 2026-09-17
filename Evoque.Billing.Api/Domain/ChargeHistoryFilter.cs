@@ -28,8 +28,8 @@ public sealed record ChargeHistoryFilter
     /// Diz se <see cref="CompanySearch"/> deve ser tratado como busca por CNPJ
     /// em vez de nome. Nome e CNPJ são buscas mutuamente exclusivas pela forma
     /// do termo: um termo só é CNPJ se for feito inteiramente de dígitos e da
-    /// pontuação usual do CNPJ, e qualquer letra no meio já indica busca por
-    /// nome.
+    /// pontuação usual do CNPJ, **com pelo menos um dígito**, e qualquer letra
+    /// no meio já indica busca por nome.
     /// </summary>
     /// <remarks>
     /// Vive aqui, e não em cada repositório, porque "isto é uma busca por
@@ -40,9 +40,36 @@ public sealed record ChargeHistoryFilter
     /// separação, um dígito solto dentro de um nome (ex.: "Farmava 2") viraria
     /// candidato a CNPJ e casaria com qualquer empresa cujo CNPJ contivesse
     /// aquele dígito — na prática, quase toda empresa do banco.
+    ///
+    /// A exigência de pelo menos um dígito não é cosmética: sem ela, um termo
+    /// feito só de pontuação (ex.: "-") também seria CNPJ-shaped, mas com zero
+    /// dígitos para comparar. As duas implementações discordam sobre o que
+    /// fazer com uma extração vazia — um <c>LIKE '%%'</c> no MySQL casa com
+    /// toda linha, enquanto um <c>Contains</c> vazio em memória não casa com
+    /// nenhuma — e essa é exatamente a divergência que esta propriedade existe
+    /// para impedir. Exigindo um dígito, o caso de extração vazia nunca chega a
+    /// acontecer: um termo sem dígito é sempre busca por nome.
     /// </remarks>
     public bool SearchesByTaxId =>
         !string.IsNullOrWhiteSpace(CompanySearch) &&
+        CompanySearch.Trim().Any(char.IsAsciiDigit) &&
         CompanySearch.Trim().All(character =>
             char.IsAsciiDigit(character) || character is '.' or '/' or '-' or ' ');
+
+    /// <summary>
+    /// Só os dígitos de <see cref="CompanySearch"/>, para comparar com
+    /// <see cref="ChargeHistoryEntry.CompanyTaxId"/>. Só faz sentido chamar
+    /// quando <see cref="SearchesByTaxId"/> é verdadeiro; nesse caso, o
+    /// resultado nunca é vazio, porque <see cref="SearchesByTaxId"/> já exige
+    /// pelo menos um dígito.
+    /// </summary>
+    /// <remarks>
+    /// Vive ao lado de <see cref="SearchesByTaxId"/> pelo mesmo motivo: as duas
+    /// implementações liam <c>CompanySearch.Where(char.IsAsciiDigit)</c> cada
+    /// uma por conta própria, e foi exatamente essa duplicação, um nível
+    /// abaixo da forma do termo, que permitiu a extração vazia divergir entre
+    /// as duas.
+    /// </remarks>
+    public string CompanyTaxIdDigits =>
+        new(CompanySearch?.Where(char.IsAsciiDigit).ToArray() ?? []);
 }

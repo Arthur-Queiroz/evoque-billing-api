@@ -58,6 +58,12 @@ public sealed class ChargeHistoryServiceTests
     {
         var scenario = await CreateScenarioAsync();
 
+        // A regressão só é exercitada enquanto os dois CNPJs contiverem o dígito
+        // buscado. Trocar um deles por outro sem "2" faria este teste continuar
+        // verde sem provar mais nada, então a precondição falha alto.
+        Assert.Contains("2", FarmavaTaxId, StringComparison.Ordinal);
+        Assert.Contains("2", OpenSportsTaxId, StringComparison.Ordinal);
+
         var historico = await scenario.Service.ListAsync(
             new ChargeHistoryQuery(Search: "Farmava 2"),
             CancellationToken.None);

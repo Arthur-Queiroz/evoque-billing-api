@@ -48,6 +48,24 @@ public sealed class ChargeHistoryServiceTests
     }
 
     /// <summary>
+    /// Nome e CNPJ são buscas mutuamente exclusivas pela forma do termo. Sem essa
+    /// regra, o dígito solto em "Farmava 2" virava candidato a CNPJ e casava com
+    /// qualquer empresa cujo CNPJ contivesse aquele dígito — aqui, as duas, pois
+    /// os dois CNPJs de teste têm um "2" em algum lugar.
+    /// </summary>
+    [Fact]
+    public async Task ListAsync_DoesNotTreatADigitInsideANameSearchAsATaxId()
+    {
+        var scenario = await CreateScenarioAsync();
+
+        var historico = await scenario.Service.ListAsync(
+            new ChargeHistoryQuery(Search: "Farmava 2"),
+            CancellationToken.None);
+
+        Assert.Empty(historico);
+    }
+
+    /// <summary>
     /// A regra de dobra de acento é o ponto mais frágil entre a implementação em
     /// memória e a futura implementação MySQL: o banco ganha isso de graça pela
     /// collation `utf8mb4_0900_ai_ci`, e este teste é o que impede a versão em

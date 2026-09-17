@@ -76,13 +76,48 @@ public sealed class InMemoryChargeHistoryRepository(InMemoryBillingDataStore dat
 
         if (!string.IsNullOrWhiteSpace(filter.CompanySearch))
         {
-            var termo = SpreadsheetText.Normalize(filter.CompanySearch);
-            var apenasDigitos = new string(filter.CompanySearch.Where(char.IsAsciiDigit).ToArray());
-            entries = entries.Where(entry =>
-                SpreadsheetText.Normalize(entry.CompanyName).Contains(termo, StringComparison.Ordinal)
-                || (apenasDigitos.Length > 0 && entry.CompanyTaxId.Contains(apenasDigitos, StringComparison.Ordinal)));
+            var searchTerm = filter.CompanySearch.Trim();
+
+            // Nome e CNPJ são buscas mutuamente exclusivas pela forma do termo:
+            // quem digita busca por um ou por outro, nunca por uma mistura dos
+            // dois. Sem essa separação, um dígito solto dentro de um nome (ex.:
+            // "Farmava 2") virava candidato a CNPJ, e `CompanyTaxId.Contains`
+            // casava com qualquer empresa cujo CNPJ contivesse aquele dígito —
+            // na prática, quase toda empresa do banco.
+            entries = IsTaxIdShaped(searchTerm)
+                ? FilterByTaxId(entries, searchTerm)
+                : FilterByCompanyName(entries, searchTerm);
         }
 
         return entries;
+    }
+
+    /// <summary>
+    /// Um termo só é CNPJ se for feito inteiramente de dígitos e da pontuação
+    /// usual do CNPJ. Qualquer letra no meio já indica busca por nome.
+    /// </summary>
+    private static bool IsTaxIdShaped(string searchTerm)
+    {
+        return searchTerm.All(character =>
+            char.IsAsciiDigit(character) || character is '.' or '/' or '-' or ' ');
+    }
+
+    private static IEnumerable<ChargeHistoryEntry> FilterByTaxId(
+        IEnumerable<ChargeHistoryEntry> entries,
+        string searchTerm)
+    {
+        var digitsOnly = new string(searchTerm.Where(char.IsAsciiDigit).ToArray());
+        return digitsOnly.Length == 0
+            ? []
+            : entries.Where(entry => entry.CompanyTaxId.Contains(digitsOnly, StringComparison.Ordinal));
+    }
+
+    private static IEnumerable<ChargeHistoryEntry> FilterByCompanyName(
+        IEnumerable<ChargeHistoryEntry> entries,
+        string searchTerm)
+    {
+        var normalizedSearchTerm = SpreadsheetText.Normalize(searchTerm);
+        return entries.Where(entry =>
+            SpreadsheetText.Normalize(entry.CompanyName).Contains(normalizedSearchTerm, StringComparison.Ordinal));
     }
 }

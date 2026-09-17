@@ -9,6 +9,8 @@ public sealed class ChargeBatchItem
             null,
             null,
             null,
+            ChargePaymentStatus.Unknown,
+            null,
             updatedAt)
     {
     }
@@ -19,6 +21,8 @@ public sealed class ChargeBatchItem
         string? asaasPaymentId,
         string? bankSlipUrl,
         string? errorMessage,
+        ChargePaymentStatus paymentStatus,
+        DateOnly? paidAt,
         DateTimeOffset updatedAt)
     {
         if (billingDraftId == Guid.Empty)
@@ -31,6 +35,8 @@ public sealed class ChargeBatchItem
         AsaasPaymentId = asaasPaymentId;
         BankSlipUrl = bankSlipUrl;
         ErrorMessage = errorMessage;
+        PaymentStatus = paymentStatus;
+        PaidAt = paidAt;
         UpdatedAt = updatedAt;
     }
 
@@ -44,7 +50,20 @@ public sealed class ChargeBatchItem
 
     public string? ErrorMessage { get; private set; }
 
+    /// <summary>
+    /// Situação do boleto no Asaas, atualizada por consulta explícita. O produto
+    /// cria a cobrança e não acompanha o pagamento sozinho.
+    /// </summary>
+    public ChargePaymentStatus PaymentStatus { get; private set; }
+
+    public DateOnly? PaidAt { get; private set; }
+
     public DateTimeOffset UpdatedAt { get; private set; }
+
+    /// <summary>Uma cobrança nestes estados não muda mais e não precisa ser consultada de novo.</summary>
+    public bool IsPaymentSettled => PaymentStatus is ChargePaymentStatus.Received
+        or ChargePaymentStatus.Confirmed
+        or ChargePaymentStatus.Refunded;
 
     public static ChargeBatchItem Restore(
         Guid billingDraftId,
@@ -52,6 +71,8 @@ public sealed class ChargeBatchItem
         string? asaasPaymentId,
         string? bankSlipUrl,
         string? errorMessage,
+        ChargePaymentStatus paymentStatus,
+        DateOnly? paidAt,
         DateTimeOffset updatedAt)
     {
         return new ChargeBatchItem(
@@ -60,6 +81,8 @@ public sealed class ChargeBatchItem
             asaasPaymentId,
             bankSlipUrl,
             errorMessage,
+            paymentStatus,
+            paidAt,
             updatedAt);
     }
 
@@ -93,5 +116,36 @@ public sealed class ChargeBatchItem
         BankSlipUrl = null;
         ErrorMessage = errorMessage;
         UpdatedAt = updatedAt;
+    }
+
+    /// <summary>
+    /// Aplica a situação devolvida pelo Asaas. Um status ainda desconhecido é
+    /// ignorado de propósito: sincronizar o histórico inteiro não pode parar
+    /// porque o Asaas passou a devolver um estado novo.
+    /// </summary>
+    public void ApplyPaymentStatus(string asaasStatus, DateOnly? paidAt, DateTimeOffset updatedAt)
+    {
+        var mappedStatus = MapPaymentStatus(asaasStatus);
+        if (mappedStatus is null)
+        {
+            return;
+        }
+
+        PaymentStatus = mappedStatus.Value;
+        PaidAt = paidAt ?? PaidAt;
+        UpdatedAt = updatedAt;
+    }
+
+    private static ChargePaymentStatus? MapPaymentStatus(string asaasStatus)
+    {
+        return asaasStatus switch
+        {
+            "PENDING" or "AWAITING_RISK_ANALYSIS" => ChargePaymentStatus.Pending,
+            "RECEIVED" or "RECEIVED_IN_CASH" => ChargePaymentStatus.Received,
+            "CONFIRMED" => ChargePaymentStatus.Confirmed,
+            "OVERDUE" => ChargePaymentStatus.Overdue,
+            "REFUNDED" or "REFUND_REQUESTED" => ChargePaymentStatus.Refunded,
+            _ => null,
+        };
     }
 }

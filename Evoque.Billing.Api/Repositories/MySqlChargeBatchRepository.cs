@@ -197,6 +197,11 @@ public sealed class MySqlChargeBatchRepository(MySqlConnectionFactory connection
                 GetNullableString(reader, "asaas_payment_id"),
                 GetNullableString(reader, "bank_slip_url"),
                 GetNullableString(reader, "error_message"),
+                // A tabela ainda não tem colunas de pagamento: até a Task 6 criar
+                // e ler `payment_status`/`paid_at`, o que o banco sabe sobre o
+                // pagamento é exatamente nada.
+                ChargePaymentStatus.Unknown,
+                null,
                 GetUtcDateTime(reader, "updated_at")));
         }
 

@@ -113,6 +113,54 @@ public sealed class ChargeHistoryServiceTests
         Assert.Null(linha.FiscalInvoicePdfUrl);
     }
 
+    [Fact]
+    public async Task ListAsync_RejectsAnUnrecognizedEnvironment()
+    {
+        var scenario = await CreateScenarioAsync();
+
+        await Assert.ThrowsAsync<ValidationException>(() => scenario.Service.ListAsync(
+            new ChargeHistoryQuery(Environment: "Producao"),
+            CancellationToken.None));
+    }
+
+    /// <summary>
+    /// Ano e mês são exigidos juntos: um filtro parcial não tem competência
+    /// nenhuma para comparar. Este cobre o ano sem o mês; o teste seguinte cobre
+    /// o mês sem o ano, porque são dois ramos distintos em
+    /// <c>ChargeHistoryService.ParseBillingPeriodReference</c>.
+    /// </summary>
+    [Fact]
+    public async Task ListAsync_RequiresMonthWhenYearIsProvided()
+    {
+        var scenario = await CreateScenarioAsync();
+
+        await Assert.ThrowsAsync<ValidationException>(() => scenario.Service.ListAsync(
+            new ChargeHistoryQuery(Year: 2026),
+            CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ListAsync_RequiresYearWhenMonthIsProvided()
+    {
+        var scenario = await CreateScenarioAsync();
+
+        await Assert.ThrowsAsync<ValidationException>(() => scenario.Service.ListAsync(
+            new ChargeHistoryQuery(Month: 9),
+            CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ListAsync_FiltersByCompetencyWhenYearAndMonthAreBothProvided()
+    {
+        var scenario = await CreateScenarioAsync();
+
+        var historico = await scenario.Service.ListAsync(
+            new ChargeHistoryQuery(Year: 2026, Month: 9),
+            CancellationToken.None);
+
+        Assert.Equal("Farmava", Assert.Single(historico).CompanyName);
+    }
+
     /// <summary>
     /// Monta duas cobranças emitidas: a Farmava em Sandbox, com nota, e a Open
     /// Sports em Produção, sem nota, uma competência depois.

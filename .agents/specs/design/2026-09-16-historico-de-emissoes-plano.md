@@ -2397,6 +2397,30 @@ Fica registrado como lacuna consciente, não como esquecimento: quando o
 histórico crescer, o controle é acrescentar um seletor que já tem backend
 pronto.
 
+### Comportamentos que duas implementações garantem sozinhas
+
+A regra de "isto é busca por CNPJ ou por nome" mora num lugar só,
+`ChargeHistoryFilter`, depois de ter divergido uma vez e ter sido corrigida. As
+outras não:
+
+| Comportamento | Garantido por |
+|---|---|
+| Busca por CNPJ ou por nome | `ChargeHistoryFilter`, um lugar só |
+| Dígitos extraídos do termo | `ChargeHistoryFilter`, um lugar só |
+| Nota de maior sequência | duas implementações independentes |
+| Ordem cronológica decrescente | duas implementações independentes |
+| Total da prévia | duas implementações independentes |
+
+As três últimas concordam hoje porque alguém leu as duas lado a lado, não porque
+algo as obrigue. Não existe fixture MySQL neste repositório — nenhum repositório
+tem — então o CI exercita só a versão em memória, que é justamente a que não roda
+em produção.
+
+É risco aceito, não descuido: montar fixture de banco foge ao escopo desta
+feature e mudaria o padrão de teste de todo o projeto. Fica registrado porque a
+busca por CNPJ já divergiu exatamente assim, e foi encontrada por leitura, não
+por teste.
+
 A **paginação** citada na spec também não entra. Ela é necessária na casa dos
 milhares de registros; hoje são 17, e paginar agora seria código sem exercício.
 O ponto de atenção fica em `MySqlChargeHistoryRepository.ListAsync`, que devolve

@@ -155,7 +155,7 @@ public sealed class MySqlChargeHistoryRepository(MySqlConnectionFactory connecti
             reader.GetDecimal("total_amount"),
             reader.GetInt32("member_count"),
             DateOnly.FromDateTime(reader.GetDateTime("due_date")),
-            new DateTimeOffset(DateTime.SpecifyKind(reader.GetDateTime("issued_at"), DateTimeKind.Utc)),
+            GetUtcDateTime(reader, "issued_at"),
             Enum.Parse<ChargeBatchItemStatus>(reader.GetString("item_status")),
             ReadNullableString(reader, "asaas_payment_id"),
             ReadNullableString(reader, "bank_slip_url"),
@@ -169,5 +169,10 @@ public sealed class MySqlChargeHistoryRepository(MySqlConnectionFactory connecti
     {
         var columnOrdinal = reader.GetOrdinal(columnName);
         return reader.IsDBNull(columnOrdinal) ? null : reader.GetString(columnOrdinal);
+    }
+
+    private static DateTimeOffset GetUtcDateTime(MySqlDataReader reader, string columnName)
+    {
+        return new DateTimeOffset(DateTime.SpecifyKind(reader.GetDateTime(columnName), DateTimeKind.Utc));
     }
 }

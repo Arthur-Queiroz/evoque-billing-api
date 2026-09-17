@@ -438,7 +438,10 @@ public sealed record ChargeHistoryEntryResponse(
             entry.AsaasEnvironment.ToString(),
             entry.CompanyName,
             entry.CompanyTaxId,
-            CompanyTaxId.Format(entry.CompanyTaxId),
+            // Qualificado porque a propriedade `CompanyTaxId` deste record
+            // esconde a classe estática de mesmo nome, e a chamada sem
+            // qualificação não compila (CS0120).
+            Domain.CompanyTaxId.Format(entry.CompanyTaxId),
             entry.TotalAmount,
             entry.MemberCount,
             entry.DueDate.ToString("yyyy-MM-dd"),
@@ -460,6 +463,7 @@ public sealed record ChargeHistoryEntryResponse(
 
 ```csharp
 using Evoque.Billing.Api.Domain;
+using Evoque.Billing.Api.Services; // SpreadsheetText
 
 namespace Evoque.Billing.Api.Repositories;
 

@@ -55,6 +55,7 @@ if (string.IsNullOrWhiteSpace(billingDatabaseConnectionString))
     builder.Services.AddScoped<IAuditLogRepository, InMemoryAuditLogRepository>();
     builder.Services.AddScoped<IChargeBatchRepository, InMemoryChargeBatchRepository>();
     builder.Services.AddScoped<IFiscalInvoiceRepository, InMemoryFiscalInvoiceRepository>();
+    builder.Services.AddScoped<IChargeHistoryRepository, InMemoryChargeHistoryRepository>();
     builder.Services.AddScoped<ICompanyBillingScheduleRepository, InMemoryCompanyBillingScheduleRepository>();
     builder.Services.AddScoped<ICompanyRepository, InMemoryCompanyRepository>();
     builder.Services.AddScoped<ICompanyCatalogImportRepository, InMemoryCompanyCatalogImportRepository>();
@@ -69,6 +70,7 @@ else
     builder.Services.AddScoped<IAuditLogRepository, MySqlAuditLogRepository>();
     builder.Services.AddScoped<IChargeBatchRepository, MySqlChargeBatchRepository>();
     builder.Services.AddScoped<IFiscalInvoiceRepository, MySqlFiscalInvoiceRepository>();
+    builder.Services.AddScoped<IChargeHistoryRepository, MySqlChargeHistoryRepository>();
     builder.Services.AddScoped<ICompanyBillingScheduleRepository, MySqlCompanyBillingScheduleRepository>();
     builder.Services.AddScoped<ICompanyRepository, MySqlCompanyRepository>();
     builder.Services.AddScoped<ICompanyCatalogImportRepository, MySqlCompanyCatalogImportRepository>();
@@ -85,6 +87,7 @@ builder.Services.AddScoped<BillingPeriodService>();
 builder.Services.AddScoped<BillingDraftService>();
 builder.Services.AddScoped<ChargeCreationService>();
 builder.Services.AddScoped<FiscalInvoiceService>();
+builder.Services.AddScoped<ChargeHistoryService>();
 builder.Services.AddScoped<ChargeBatchService>();
 builder.Services.AddScoped<CompanyBillingScheduleService>();
 builder.Services.AddScoped<ScheduledChargeBatchService>();

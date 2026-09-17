@@ -84,28 +84,15 @@ public sealed class InMemoryChargeHistoryRepository(InMemoryBillingDataStore dat
         {
             var searchTerm = filter.CompanySearch.Trim();
 
-            // Nome e CNPJ são buscas mutuamente exclusivas pela forma do termo:
-            // quem digita busca por um ou por outro, nunca por uma mistura dos
-            // dois. Sem essa separação, um dígito solto dentro de um nome (ex.:
-            // "Farmava 2") virava candidato a CNPJ, e `CompanyTaxId.Contains`
-            // casava com qualquer empresa cujo CNPJ contivesse aquele dígito —
-            // na prática, quase toda empresa do banco.
-            entries = IsTaxIdShaped(searchTerm)
+            // A forma do termo decide entre CNPJ e nome; a regra vive em
+            // ChargeHistoryFilter.SearchesByTaxId para que esta implementação e
+            // a MySQL nunca divirjam sobre o que é CNPJ e o que é nome.
+            entries = filter.SearchesByTaxId
                 ? FilterByTaxId(entries, searchTerm)
                 : FilterByCompanyName(entries, searchTerm);
         }
 
         return entries;
-    }
-
-    /// <summary>
-    /// Um termo só é CNPJ se for feito inteiramente de dígitos e da pontuação
-    /// usual do CNPJ. Qualquer letra no meio já indica busca por nome.
-    /// </summary>
-    private static bool IsTaxIdShaped(string searchTerm)
-    {
-        return searchTerm.All(character =>
-            char.IsAsciiDigit(character) || character is '.' or '/' or '-' or ' ');
     }
 
     private static IEnumerable<ChargeHistoryEntry> FilterByTaxId(

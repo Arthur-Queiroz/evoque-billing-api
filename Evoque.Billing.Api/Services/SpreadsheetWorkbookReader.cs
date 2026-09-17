@@ -226,21 +226,3 @@ public sealed record SpreadsheetRow(
             : string.Empty;
     }
 }
-
-/// <summary>
-/// Comparação de textos vindos da planilha sem acento e sem diferenciar
-/// maiúsculas, usada tanto para reconhecer cabeçalhos quanto para deduplicar.
-/// </summary>
-public static class SpreadsheetText
-{
-    public static string Normalize(string value)
-    {
-        var normalizedValue = value.Trim().Normalize(NormalizationForm.FormD);
-        var characters = normalizedValue
-            .Where(character => CharUnicodeInfo.GetUnicodeCategory(character)
-                != UnicodeCategory.NonSpacingMark)
-            .Select(char.ToLowerInvariant)
-            .ToArray();
-        return new string(characters).Normalize(NormalizationForm.FormC);
-    }
-}

@@ -1,5 +1,4 @@
 using Evoque.Billing.Api.Domain;
-using Evoque.Billing.Api.Services;
 
 namespace Evoque.Billing.Api.Repositories;
 
@@ -116,8 +115,8 @@ public sealed class InMemoryChargeHistoryRepository(InMemoryBillingDataStore dat
         IEnumerable<ChargeHistoryEntry> entries,
         string searchTerm)
     {
-        var normalizedSearchTerm = SpreadsheetText.Normalize(searchTerm);
+        var normalizedSearchTerm = TextNormalization.Normalize(searchTerm);
         return entries.Where(entry =>
-            SpreadsheetText.Normalize(entry.CompanyName).Contains(normalizedSearchTerm, StringComparison.Ordinal));
+            TextNormalization.Normalize(entry.CompanyName).Contains(normalizedSearchTerm, StringComparison.Ordinal));
     }
 }

@@ -230,10 +230,10 @@ public sealed class CorporateMemberService(
             return true;
         }
 
-        var normalizedSearch = SpreadsheetText.Normalize(query.Search);
-        return SpreadsheetText.Normalize(corporateMember.MemberName)
+        var normalizedSearch = TextNormalization.Normalize(query.Search);
+        return TextNormalization.Normalize(corporateMember.MemberName)
                 .Contains(normalizedSearch, StringComparison.Ordinal)
-            || SpreadsheetText.Normalize(corporateMember.CompanyName)
+            || TextNormalization.Normalize(corporateMember.CompanyName)
                 .Contains(normalizedSearch, StringComparison.Ordinal)
             || corporateMember.EvoMemberId.ToString().Contains(query.Search.Trim(), StringComparison.Ordinal);
     }

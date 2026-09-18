@@ -526,6 +526,82 @@ public sealed class CompanyCatalogServiceTests
         Assert.Empty(catalog.DataStore.ChargeBatches);
     }
 
+    /// <summary>
+    /// O valor é opcional no cadastro de propósito: exigi-lo travaria cadastrar
+    /// uma empresa antes de alguém saber quanto foi combinado. Quem recusa é a
+    /// geração de prévia, não o cadastro.
+    /// </summary>
+    [Fact]
+    public void NewCompany_HasNoAmountPerMemberYet()
+    {
+        var company = Company.CreateManually(
+            OpenSportsTaxId, "Open Sports", OperatorId, DateTimeOffset.UtcNow);
+
+        Assert.Null(company.AmountPerMember);
+        Assert.False(company.CanBeBilled);
+    }
+
+    [Fact]
+    public void SetAmountPerMember_StoresTheAgreedAmount()
+    {
+        var company = Company.CreateManually(
+            OpenSportsTaxId, "Open Sports", OperatorId, DateTimeOffset.UtcNow);
+
+        company.SetAmountPerMember(89.90m, OperatorId, DateTimeOffset.UtcNow);
+
+        Assert.Equal(89.90m, company.AmountPerMember);
+        Assert.True(company.CanBeBilled);
+    }
+
+    /// <summary>
+    /// Zero e negativo não são preços. Aceitá-los produziria prévia de valor
+    /// zero, que passa em toda validação seguinte e vira boleto sem sentido.
+    /// </summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    [InlineData(-89.90)]
+    public void SetAmountPerMember_RefusesSomethingThatIsNotAPrice(decimal amount)
+    {
+        var company = Company.CreateManually(
+            OpenSportsTaxId, "Open Sports", OperatorId, DateTimeOffset.UtcNow);
+
+        Assert.Throws<ValidationException>(
+            () => company.SetAmountPerMember(amount, OperatorId, DateTimeOffset.UtcNow));
+    }
+
+    /// <summary>
+    /// Limpar o valor é diferente de zerar: uma empresa que saiu do corporativo
+    /// deixa de ter preço, e a geração passa a recusá-la.
+    /// </summary>
+    [Fact]
+    public void SetAmountPerMember_AcceptsNullToClearIt()
+    {
+        var company = Company.CreateManually(
+            OpenSportsTaxId, "Open Sports", OperatorId, DateTimeOffset.UtcNow);
+        company.SetAmountPerMember(89.90m, OperatorId, DateTimeOffset.UtcNow);
+
+        company.SetAmountPerMember(null, OperatorId, DateTimeOffset.UtcNow);
+
+        Assert.Null(company.AmountPerMember);
+        Assert.False(company.CanBeBilled);
+    }
+
+    /// <summary>
+    /// Empresa inativa não é faturada, tenha preço ou não.
+    /// </summary>
+    [Fact]
+    public void CanBeBilled_IsFalseForAnInactiveCompany()
+    {
+        var company = Company.CreateManually(
+            OpenSportsTaxId, "Open Sports", OperatorId, DateTimeOffset.UtcNow);
+        company.SetAmountPerMember(89.90m, OperatorId, DateTimeOffset.UtcNow);
+
+        company.Deactivate(OperatorId, DateTimeOffset.UtcNow);
+
+        Assert.False(company.CanBeBilled);
+    }
+
     private static async Task<IReadOnlyCollection<CompanyResponse>> ListAsync(
         TestCatalog catalog,
         ListCompaniesQuery query)

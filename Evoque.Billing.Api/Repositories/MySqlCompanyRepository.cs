@@ -182,6 +182,7 @@ public sealed class MySqlCompanyRepository(MySqlConnectionFactory connectionFact
             ReadNullableString(reader, "asaas_sandbox_customer_id"),
             ReadNullableString(reader, "asaas_production_customer_id"),
             reader.GetBoolean("retains_iss"),
+            amountPerMember: null, // TODO(Tarefa 3): ler a coluna real da migration de valor por colaborador.
             reader.GetString("created_by"),
             new DateTimeOffset(DateTime.SpecifyKind(reader.GetDateTime("created_at"), DateTimeKind.Utc)),
             reader.GetString("updated_by"),

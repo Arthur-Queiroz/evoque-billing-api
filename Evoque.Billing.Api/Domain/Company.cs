@@ -116,6 +116,21 @@ public sealed class Company
     /// </summary>
     public bool RetainsIss { get; private set; }
 
+    /// <summary>
+    /// Quanto a empresa paga por colaborador, combinado fora do sistema. O EVO
+    /// não exporta esse valor: os contratos corporativos saem zerados porque o
+    /// desconto acontece em folha.
+    ///
+    /// Nulo é o estado de uma empresa cujo valor ninguém informou ainda, e é
+    /// diferente de zero — que não é preço nenhum.
+    /// </summary>
+    public decimal? AmountPerMember { get; private set; }
+
+    /// <summary>
+    /// Empresa pronta para gerar prévia. Faturar exige preço; cadastrar, não.
+    /// </summary>
+    public bool CanBeBilled => IsActive && AmountPerMember is > 0m;
+
     public string CreatedBy { get; }
 
     public DateTimeOffset CreatedAt { get; }
@@ -188,6 +203,7 @@ public sealed class Company
         string? asaasSandboxCustomerId,
         string? asaasProductionCustomerId,
         bool retainsIss,
+        decimal? amountPerMember,
         string createdBy,
         DateTimeOffset createdAt,
         string updatedBy,
@@ -209,6 +225,7 @@ public sealed class Company
             AsaasSandboxCustomerId = asaasSandboxCustomerId,
             AsaasProductionCustomerId = asaasProductionCustomerId,
             RetainsIss = retainsIss,
+            AmountPerMember = amountPerMember,
             UpdatedBy = updatedBy,
             UpdatedAt = updatedAt,
         };
@@ -312,6 +329,18 @@ public sealed class Company
     public void SetIssRetention(bool retainsIss, string operatorId, DateTimeOffset updatedAt)
     {
         RetainsIss = retainsIss;
+        RegisterUpdate(operatorId, updatedAt);
+    }
+
+    public void SetAmountPerMember(decimal? amountPerMember, string operatorId, DateTimeOffset updatedAt)
+    {
+        if (amountPerMember is <= 0m)
+        {
+            throw new ValidationException(
+                "O valor por colaborador deve ser maior que zero. Para retirar o valor, informe vazio.");
+        }
+
+        AmountPerMember = amountPerMember;
         RegisterUpdate(operatorId, updatedAt);
     }
 

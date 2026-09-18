@@ -1434,10 +1434,16 @@ E o método, depois de `MarkFailed`:
 - [ ] **Step 5: Corrigir o chamador de `Restore`**
 
 `MySqlChargeBatchRepository.ListItemsAsync` chama `ChargeBatchItem.Restore` e
-vai quebrar a compilação. A Task 6 é dona desse arquivo; para ver os testes
-desta task passarem, acrescente temporariamente
-`ChargePaymentStatus.Unknown, null` na posição correta e **reverta com
-`git checkout --` antes de commitar**.
+para de compilar com os parâmetros novos. Passe `ChargePaymentStatus.Unknown,
+null` ali, **e deixe assim no commit**.
+
+Não é gambiarra: até a Task 6 criar as colunas, `Unknown` é exatamente o que o
+banco sabe sobre essas cobranças — ninguém consultou nenhuma. Um comentário de
+uma linha aponta que a Task 6 passa a ler as colunas de verdade.
+
+A alternativa que este plano trazia antes — mexer e reverter antes de commitar —
+produziria um commit que não compila. Isso quebra `git bisect` e qualquer CI que
+rode naquele ponto, para economizar uma linha que de todo jeito precisa existir.
 
 - [ ] **Step 6: Rodar e confirmar que passa**
 

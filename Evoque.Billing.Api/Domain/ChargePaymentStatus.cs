@@ -12,5 +12,15 @@ public enum ChargePaymentStatus
     Received,
     Confirmed,
     Overdue,
+
+    /// <summary>
+    /// Estorno pedido, ainda não decidido. Existe separado de
+    /// <see cref="Refunded"/> porque o Asaas pode negar o pedido e devolver a
+    /// cobrança para `RECEIVED`/`CONFIRMED`: tratar isso como estado final
+    /// pararia a sincronização e deixaria a cobrança presa mostrando
+    /// "estornada" para sempre, mesmo com o dinheiro recebido.
+    /// </summary>
+    RefundRequested,
+
     Refunded,
 }

@@ -22,6 +22,7 @@ public sealed class ChargeBatchItemTests
     [InlineData("RECEIVED", ChargePaymentStatus.Received)]
     [InlineData("CONFIRMED", ChargePaymentStatus.Confirmed)]
     [InlineData("OVERDUE", ChargePaymentStatus.Overdue)]
+    [InlineData("REFUND_REQUESTED", ChargePaymentStatus.RefundRequested)]
     [InlineData("REFUNDED", ChargePaymentStatus.Refunded)]
     public void ApplyPaymentStatus_MapsWhatTheAccountReturns(
         string asaasStatus,
@@ -67,6 +68,7 @@ public sealed class ChargeBatchItemTests
     [Theory]
     [InlineData("PENDING", false)]
     [InlineData("OVERDUE", false)]
+    [InlineData("REFUND_REQUESTED", false)]
     [InlineData("RECEIVED", true)]
     [InlineData("CONFIRMED", true)]
     [InlineData("REFUNDED", true)]
@@ -77,5 +79,33 @@ public sealed class ChargeBatchItemTests
         chargeBatchItem.ApplyPaymentStatus(asaasStatus, null, CreatedAt.AddDays(1));
 
         Assert.Equal(expected, chargeBatchItem.IsPaymentSettled);
+    }
+
+    /// <summary>
+    /// O Asaas pode negar um estorno e devolver a cobrança para recebida. Tratar
+    /// o pedido como estado final pararia a sincronização no meio do caminho e
+    /// deixaria a cobrança presa mostrando "estornada" para sempre, com o
+    /// dinheiro recebido — errado e sem conserto, porque ninguém voltaria a
+    /// perguntar.
+    /// </summary>
+    [Fact]
+    public void ApplyPaymentStatus_KeepsAskingWhileARefundIsOnlyRequested()
+    {
+        var chargeBatchItem = new ChargeBatchItem(BillingDraftId, CreatedAt);
+
+        chargeBatchItem.ApplyPaymentStatus("RECEIVED", new DateOnly(2026, 10, 2), CreatedAt.AddDays(1));
+        chargeBatchItem.ApplyPaymentStatus("REFUND_REQUESTED", null, CreatedAt.AddDays(2));
+
+        // É aqui que o teste morde: enquanto o pedido está em aberto a cobrança
+        // não pode estar liquidada, senão a sincronização para de consultar e o
+        // desfecho abaixo nunca chega.
+        Assert.Equal(ChargePaymentStatus.RefundRequested, chargeBatchItem.PaymentStatus);
+        Assert.False(chargeBatchItem.IsPaymentSettled);
+
+        chargeBatchItem.ApplyPaymentStatus("RECEIVED", null, CreatedAt.AddDays(3));
+
+        Assert.Equal(ChargePaymentStatus.Received, chargeBatchItem.PaymentStatus);
+        Assert.True(chargeBatchItem.IsPaymentSettled);
+        Assert.Equal(new DateOnly(2026, 10, 2), chargeBatchItem.PaidAt);
     }
 }

@@ -144,7 +144,8 @@ public sealed class ChargeBatchItem
             "RECEIVED" or "RECEIVED_IN_CASH" => ChargePaymentStatus.Received,
             "CONFIRMED" => ChargePaymentStatus.Confirmed,
             "OVERDUE" => ChargePaymentStatus.Overdue,
-            "REFUNDED" or "REFUND_REQUESTED" => ChargePaymentStatus.Refunded,
+            "REFUND_REQUESTED" => ChargePaymentStatus.RefundRequested,
+            "REFUNDED" => ChargePaymentStatus.Refunded,
             _ => null,
         };
     }

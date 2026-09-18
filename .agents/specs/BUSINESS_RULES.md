@@ -141,7 +141,12 @@ planilha do CRM 2.0 → empresa pagadora → CNPJ → cliente Asaas → dia
 - A reemissão cria a sequência seguinte, usa a retenção de ISS atual da empresa
   e exige a frase `CONFIRMAR`. É esse caminho que torna útil corrigir o cadastro
   de uma empresa cuja nota foi recusada.
-- O Sandbox não emite NFS-e; a tentativa é registrada como ignorada.
+- **O Sandbox emite NFS-e.** Quem decide é a configuração do ambiente, não o
+  nome dele: `FiscalInvoiceService` consulta `CanIssueInvoices(asaasEnvironment)`
+  e não existe caminho que ignore a emissão por ser Sandbox. Comprovado em
+  15/09/2026 com a nota `inv_000000549777`, que chegou a `AUTHORIZED` sozinha em
+  cerca de sete minutos, com PDF e XML. A credencial de prefeitura usada era
+  fictícia, o que confirma que o ambiente é simulado.
 - A emissão exige `AllowInvoiceIssuance` habilitado, desligado por padrão, além
   da política de ambiente já existente.
 - A sincronização de status é acionada pela tela, não por processo em segundo

@@ -178,7 +178,7 @@ quem estiver tentando.
 | Situação | Resposta |
 |---|---|
 | usuário ou senha errados | `401`, mensagem única |
-| campos vazios | `400` |
+| campos vazios | `401`, a mesma mensagem |
 | sessão expirada | `401`, portal volta ao login |
 | nenhum usuário configurado | a aplicação **não sobe** |
 
@@ -190,7 +190,7 @@ Falhar na subida é ruidoso e reversível; abrir o sistema não é.
 
 - senha correta autentica; senha errada não;
 - usuário inexistente devolve o mesmo resultado que senha errada;
-- a comparação de senha não sai mais cedo para usuário inexistente;
+- usuário e senha vazios são recusados como qualquer credencial inválida;
 - ambiente sem usuário configurado impede a subida;
 - um controller sem `[AllowAnonymous]` exige autenticação — o teste que protege
   a política padrão, porque o defeito que ela evita é silencioso.
@@ -202,6 +202,11 @@ perdido.
 
 O que quebra são os 53 pontos que constroem contratos de requisição com
 `OperatorId`. É trabalho mecânico de acompanhar a mudança, não regressão.
+
+Uma coisa que a spec descreve e nenhum teste prova: a comparação de senha não
+sair mais cedo para usuário inexistente. Tempo de resposta não se afere com
+confiança num teste unitário — a máquina varia mais que a diferença medida. Fica
+garantida por leitura do código e pelo comentário que explica por que existe.
 
 ## O dia do Azure
 

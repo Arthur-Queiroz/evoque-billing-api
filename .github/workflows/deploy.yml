@@ -1,118 +1,36 @@
-name: Publish API and deploy KVM2
+name: Test, publish API, and deploy
 
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
   packages: write
 
-concurrency:
-  group: evoque-api-production
-  cancel-in-progress: false
-
 jobs:
-  publish-and-deploy:
-    if: vars.DEPLOY_ENABLED == 'true'
+  test:
     runs-on: ubuntu-latest
-    environment: production
     steps:
       - uses: actions/checkout@v4
-
-      - name: Autenticar no GitHub Container Registry
-        uses: docker/login-action@v3
+      - uses: actions/setup-dotnet@v4
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          dotnet-version: 10.0.x
+      - run: dotnet restore Evoque.Billing.slnx
+      - run: dotnet build Evoque.Billing.slnx --no-restore -warnaserror
+      - run: dotnet test Evoque.Billing.slnx --no-build
 
-      - name: Publicar imagem da API
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: docker/Dockerfile
-          push: true
-          tags: |
-            ghcr.io/arthur-queiroz/evoque-billing-api:main
-            ghcr.io/arthur-queiroz/evoque-billing-api:${{ github.sha }}
-
-      - name: Carregar chave de deploy
-        uses: webfactory/ssh-agent@v0.9.1
-        with:
-          ssh-private-key: ${{ secrets.KVM2_DEPLOY_SSH_PRIVATE_KEY }}
-
-      - name: Instalar Cloudflare Access CLI
-        run: |
-          set -eu
-          curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o "$RUNNER_TEMP/cloudflared"
-          sudo install -m 0755 "$RUNNER_TEMP/cloudflared" /usr/local/bin/cloudflared
-
-      - name: Configurar SSH para KVM2
-        env:
-          DEPLOY_HOST: ${{ vars.KVM2_DEPLOY_HOST }}
-          ACCESS_HOST: ${{ vars.KVM2_CLOUDFLARE_SSH_HOST }}
-        run: |
-          set -eu
-          test -n "$DEPLOY_HOST"
-          test -n "$ACCESS_HOST"
-          mkdir -p ~/.ssh
-          cat >> ~/.ssh/config <<EOF
-          Host kvm2-evoque
-            HostName $DEPLOY_HOST
-            User root
-            ProxyCommand cloudflared access ssh --hostname $ACCESS_HOST
-            StrictHostKeyChecking accept-new
-          EOF
-
-      - name: Atualizar runtime da VPS
-        env:
-          RELEASE_NAME: ${{ github.sha }}
-          MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
-          ASAAS_API_KEY: ${{ secrets.ASAAS_API_KEY }}
-          ASAAS_PRODUCTION_API_KEY: ${{ secrets.ASAAS_PRODUCTION_API_KEY }}
-          ASAAS_PRODUCTION_CHARGE_CREATION_ENABLED: ${{ vars.ASAAS_PRODUCTION_CHARGE_CREATION_ENABLED || 'false' }}
-          EVO_USERNAME: ${{ secrets.EVO_USERNAME }}
-          EVO_API_KEY: ${{ secrets.EVO_API_KEY }}
-          GHCR_USERNAME: ${{ github.actor }}
-          GHCR_TOKEN: ${{ github.token }}
-        run: |
-          set -eu
-          test -n "$MYSQL_PASSWORD"
-          test -n "$ASAAS_API_KEY"
-          test -n "$ASAAS_PRODUCTION_API_KEY"
-          test "$ASAAS_PRODUCTION_CHARGE_CREATION_ENABLED" = "true" || test "$ASAAS_PRODUCTION_CHARGE_CREATION_ENABLED" = "false"
-          test -n "$EVO_USERNAME"
-          test -n "$EVO_API_KEY"
-          test -n "$GHCR_TOKEN"
-          release_directory="/opt/evoque/releases/api-$RELEASE_NAME"
-          ssh kvm2-evoque "install -d -m 700 '$release_directory'"
-          tar --exclude-vcs -czf - . | ssh kvm2-evoque "tar -xzf - -C '$release_directory'"
-          printf '%s' "$GHCR_TOKEN" |
-            ssh kvm2-evoque \
-              "docker login ghcr.io --username '$GHCR_USERNAME' --password-stdin"
-          printf '%s' "$MYSQL_PASSWORD" |
-            ssh kvm2-evoque \
-              "sh '$release_directory/infra/scripts/set-production-secret.sh' MYSQL_PASSWORD"
-          printf '%s' "$ASAAS_API_KEY" |
-            ssh kvm2-evoque \
-              "sh '$release_directory/infra/scripts/set-production-secret.sh' ASAAS__APIKEY"
-          printf '%s' "$ASAAS_PRODUCTION_API_KEY" |
-            ssh kvm2-evoque \
-              "sh '$release_directory/infra/scripts/set-production-secret.sh' ASAAS__PRODUCTION__APIKEY"
-          printf '%s' "$ASAAS_PRODUCTION_CHARGE_CREATION_ENABLED" |
-            ssh kvm2-evoque \
-              "sh '$release_directory/infra/scripts/set-production-secret.sh' ASAAS__PRODUCTION__ALLOWCHARGECREATION"
-          printf '%s' "$EVO_USERNAME" |
-            ssh kvm2-evoque \
-              "sh '$release_directory/infra/scripts/set-production-secret.sh' EVO__USERNAME"
-          printf '%s' "$EVO_API_KEY" |
-            ssh kvm2-evoque \
-              "sh '$release_directory/infra/scripts/set-production-secret.sh' EVO__APIKEY"
-          ssh kvm2-evoque "
-            set -eu
-            test -f /opt/evoque/production.env
-            sh '$release_directory/infra/scripts/deploy.sh' '$release_directory'
-            ln -sfn '$release_directory' /opt/evoque/current
-          "
+  release:
+    if: github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED == 'true'
+    needs: test
+    uses: Arthur-Queiroz/vps-deploy/.github/workflows/app-deploy.yml@main
+    with:
+      app-id: evoque
+      service: api
+      image-repo: Arthur-Queiroz/evoque-billing-api
+      dockerfile: docker/Dockerfile
+    secrets:
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      VPS_HOST: ${{ secrets.VPS_HOST }}

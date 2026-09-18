@@ -27,6 +27,8 @@ public sealed class MySqlChargeHistoryRepository(MySqlConnectionFactory connecti
             cbi.asaas_payment_id AS asaas_payment_id,
             cbi.bank_slip_url    AS bank_slip_url,
             cbi.error_message    AS item_error_message,
+            cbi.payment_status   AS payment_status,
+            cbi.paid_at          AS paid_at,
             fi.status            AS invoice_status,
             fi.pdf_url           AS invoice_pdf_url,
             fi.error_message     AS invoice_error_message,
@@ -160,6 +162,8 @@ public sealed class MySqlChargeHistoryRepository(MySqlConnectionFactory connecti
             ReadNullableString(reader, "asaas_payment_id"),
             ReadNullableString(reader, "bank_slip_url"),
             ReadNullableString(reader, "item_error_message"),
+            Enum.Parse<ChargePaymentStatus>(reader.GetString("payment_status")),
+            ReadNullableDateOnly(reader, "paid_at"),
             invoiceStatus is null ? null : Enum.Parse<FiscalInvoiceStatus>(invoiceStatus),
             ReadNullableString(reader, "invoice_pdf_url"),
             ReadNullableString(reader, "invoice_error_message"));
@@ -169,6 +173,14 @@ public sealed class MySqlChargeHistoryRepository(MySqlConnectionFactory connecti
     {
         var columnOrdinal = reader.GetOrdinal(columnName);
         return reader.IsDBNull(columnOrdinal) ? null : reader.GetString(columnOrdinal);
+    }
+
+    private static DateOnly? ReadNullableDateOnly(MySqlDataReader reader, string columnName)
+    {
+        var columnOrdinal = reader.GetOrdinal(columnName);
+        return reader.IsDBNull(columnOrdinal)
+            ? null
+            : DateOnly.FromDateTime(reader.GetDateTime(columnOrdinal));
     }
 
     private static DateTimeOffset GetUtcDateTime(MySqlDataReader reader, string columnName)

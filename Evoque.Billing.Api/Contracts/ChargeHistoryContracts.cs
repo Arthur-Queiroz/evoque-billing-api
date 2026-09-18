@@ -26,6 +26,8 @@ public sealed record ChargeHistoryEntryResponse(
     string? AsaasPaymentId,
     string? BankSlipUrl,
     string? ItemErrorMessage,
+    string PaymentStatus,
+    DateOnly? PaidAt,
     string? FiscalInvoiceStatus,
     string? FiscalInvoicePdfUrl,
     string? FiscalInvoiceErrorMessage)
@@ -53,6 +55,8 @@ public sealed record ChargeHistoryEntryResponse(
             entry.AsaasPaymentId,
             entry.BankSlipUrl,
             entry.ItemErrorMessage,
+            entry.PaymentStatus.ToString(),
+            entry.PaidAt,
             entry.FiscalInvoiceStatus?.ToString(),
             entry.FiscalInvoicePdfUrl,
             entry.FiscalInvoiceErrorMessage);

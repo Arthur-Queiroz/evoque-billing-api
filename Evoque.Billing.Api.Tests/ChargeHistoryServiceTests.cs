@@ -206,6 +206,45 @@ public sealed class ChargeHistoryServiceTests
         Assert.Equal("Farmava", Assert.Single(historico).CompanyName);
     }
 
+    [Fact]
+    public async Task ListAsync_ShowsWhetherTheSlipWasPaid()
+    {
+        var scenario = await CreateScenarioAsync();
+        var chargeBatch = scenario.DataStore.ChargeBatches.Values
+            .Single(batch => batch.AsaasEnvironment == AsaasEnvironment.Sandbox);
+        chargeBatch.Items.Single().ApplyPaymentStatus(
+            "RECEIVED",
+            new DateOnly(2026, 10, 2),
+            DateTimeOffset.UtcNow);
+
+        var historico = await scenario.Service.ListAsync(
+            new ChargeHistoryQuery(Search: "farmava"),
+            CancellationToken.None);
+
+        var linha = Assert.Single(historico);
+        Assert.Equal("Received", linha.PaymentStatus);
+        Assert.Equal(new DateOnly(2026, 10, 2), linha.PaidAt);
+    }
+
+    /// <summary>
+    /// Uma cobrança que ninguém consultou não é uma cobrança em aberto. A tela
+    /// precisa dizer "não consultado", e para isso o estado tem que chegar nela
+    /// distinto de `Pending`.
+    /// </summary>
+    [Fact]
+    public async Task ListAsync_SaysNobodyHasAskedYetInsteadOfGuessing()
+    {
+        var scenario = await CreateScenarioAsync();
+
+        var historico = await scenario.Service.ListAsync(
+            new ChargeHistoryQuery(Search: "open"),
+            CancellationToken.None);
+
+        var linha = Assert.Single(historico);
+        Assert.Equal("Unknown", linha.PaymentStatus);
+        Assert.Null(linha.PaidAt);
+    }
+
     /// <summary>
     /// Monta duas cobranças emitidas: a Farmava em Sandbox, com nota, e a Open
     /// Sports em Produção, sem nota, uma competência depois.

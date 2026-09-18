@@ -33,6 +33,8 @@ public sealed record ChargeHistoryEntry(
     string? AsaasPaymentId,
     string? BankSlipUrl,
     string? ItemErrorMessage,
+    ChargePaymentStatus PaymentStatus,
+    DateOnly? PaidAt,
     FiscalInvoiceStatus? FiscalInvoiceStatus,
     string? FiscalInvoicePdfUrl,
     string? FiscalInvoiceErrorMessage);

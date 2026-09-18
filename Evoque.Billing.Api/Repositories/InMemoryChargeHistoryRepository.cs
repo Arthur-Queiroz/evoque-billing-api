@@ -54,6 +54,8 @@ public sealed class InMemoryChargeHistoryRepository(InMemoryBillingDataStore dat
                     chargeBatchItem.AsaasPaymentId,
                     chargeBatchItem.BankSlipUrl,
                     chargeBatchItem.ErrorMessage,
+                    chargeBatchItem.PaymentStatus,
+                    chargeBatchItem.PaidAt,
                     fiscalInvoice?.Status,
                     fiscalInvoice?.PdfUrl,
                     fiscalInvoice?.ErrorMessage));

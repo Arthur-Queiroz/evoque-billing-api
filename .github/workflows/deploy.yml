@@ -29,7 +29,7 @@ jobs:
     with:
       app-id: evoque
       service: api
-      image-repo: Arthur-Queiroz/evoque-billing-api
+      image-repo: arthur-queiroz/evoque-billing-api
       dockerfile: docker/Dockerfile
     secrets:
       DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}

@@ -131,4 +131,68 @@ public sealed class OperatorAuthenticationServiceTests
 
         return new OperatorAuthenticationService(Options.Create(options));
     }
+
+    /// <summary>
+    /// Uma lista vazia poderia ser lida como "sem restrição", e o modo de falha
+    /// seria um deploy que remove a proteção em silêncio. Falhar na subida é
+    /// barulhento e reversível; abrir o sistema não é.
+    /// </summary>
+    [Fact]
+    public void Validate_RefusesToStartWithoutAnyOperator()
+    {
+        var options = new OperatorAccountOptions { Users = [] };
+
+        var exception = Assert.Throws<InvalidOperationException>(options.Validate);
+        Assert.Contains("AUTH__USERS", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Validate_RefusesAnOperatorWithoutUsernameOrPassword()
+    {
+        var withoutUsername = new OperatorAccountOptions
+        {
+            Users = [new OperatorAccount { Username = "", Password = "k7Qx2mVp9RtLw4Ha" }],
+        };
+        var withoutPassword = new OperatorAccountOptions
+        {
+            Users = [new OperatorAccount { Username = "geovanna", Password = "" }],
+        };
+
+        Assert.Throws<InvalidOperationException>(withoutUsername.Validate);
+        Assert.Throws<InvalidOperationException>(withoutPassword.Validate);
+    }
+
+    /// <summary>
+    /// Dois operadores com o mesmo nome fariam a autenticação depender da ordem
+    /// em que o ambiente foi escrito, e a auditoria não distinguiria os dois.
+    /// </summary>
+    [Fact]
+    public void Validate_RefusesTwoOperatorsWithTheSameUsername()
+    {
+        var options = new OperatorAccountOptions
+        {
+            Users =
+            [
+                new OperatorAccount { Username = "geovanna", Password = "k7Qx2mVp9RtLw4Ha" },
+                new OperatorAccount { Username = "GEOVANNA", Password = "Zp3nB8yTq6WsVe1C" },
+            ],
+        };
+
+        Assert.Throws<InvalidOperationException>(options.Validate);
+    }
+
+    [Fact]
+    public void Validate_AcceptsAWellFormedConfiguration()
+    {
+        var options = new OperatorAccountOptions
+        {
+            Users =
+            [
+                new OperatorAccount { Username = "geovanna", Password = "k7Qx2mVp9RtLw4Ha" },
+                new OperatorAccount { Username = "arthur", Password = "Zp3nB8yTq6WsVe1C" },
+            ],
+        };
+
+        options.Validate();
+    }
 }

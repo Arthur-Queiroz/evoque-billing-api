@@ -329,6 +329,31 @@ public sealed class CompanyCatalogServiceTests
         Assert.Null(company.AsaasSandboxCustomerId);
     }
 
+    /// <summary>
+    /// O valor precisa atravessar o cadastro e voltar na leitura. Sem isto, ele
+    /// existiria no domínio e seria invisível para quem opera.
+    /// </summary>
+    [Fact]
+    public async Task UpdateAsync_StoresAndReturnsTheAmountPerMember()
+    {
+        var catalog = CreateCatalog();
+        await catalog.Service.CreateAsync(
+            new CreateCompanyRequest(OpenSportsTaxId, "Open Sports", 20),
+            OperatorId,
+            CancellationToken.None);
+
+        var updated = await catalog.Service.UpdateAsync(
+            OpenSportsTaxId,
+            new UpdateCompanyRequest("Open Sports", 20, 89.90m),
+            OperatorId,
+            CancellationToken.None);
+
+        Assert.Equal(89.90m, updated.AmountPerMember);
+
+        var listed = await catalog.Service.GetAsync(OpenSportsTaxId, CancellationToken.None);
+        Assert.Equal(89.90m, listed.AmountPerMember);
+    }
+
     [Fact]
     public async Task SynchronizeAsync_CompletesWhenTheRegistryGatewayThrowsUnexpectedly()
     {

@@ -110,6 +110,7 @@ public sealed class CompanyCatalogService(
             request.DisplayName,
             operatorId,
             updatedAt);
+        company.SetAmountPerMember(request.AmountPerMember, operatorId, updatedAt);
         await companyRepository.UpsertAsync(company, cancellationToken);
         await ApplyClosingDayAsync(company, request.ClosingDay, operatorId, cancellationToken);
         await RegisterAuditAsync(

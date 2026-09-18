@@ -19,7 +19,8 @@ public sealed record CreateCompanyRequest(
 
 public sealed record UpdateCompanyRequest(
     string DisplayName,
-    int? ClosingDay);
+    int? ClosingDay,
+    decimal? AmountPerMember = null);
 
 /// <summary>Liga ou desliga a retenção de ISS da empresa nas notas fiscais.</summary>
 public sealed record SetCompanyIssRetentionRequest(bool RetainsIss);
@@ -87,7 +88,8 @@ public sealed record CompanyResponse(
     string? AsaasProductionCustomerId,
     bool RetainsIss,
     DateTimeOffset UpdatedAt,
-    string UpdatedBy)
+    string UpdatedBy,
+    decimal? AmountPerMember)
 {
     public static CompanyResponse FromDomain(
         Company company,
@@ -119,7 +121,8 @@ public sealed record CompanyResponse(
             company.AsaasProductionCustomerId,
             company.RetainsIss,
             company.UpdatedAt,
-            company.UpdatedBy);
+            company.UpdatedBy,
+            company.AmountPerMember);
     }
 }
 

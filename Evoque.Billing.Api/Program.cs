@@ -154,6 +154,7 @@ builder.Services.AddScoped<IEvoDirectoryGateway, EvoDirectoryGateway>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<BillingPeriodService>();
 builder.Services.AddScoped<BillingDraftService>();
+builder.Services.AddScoped<CorporateBillingDraftService>();
 builder.Services.AddScoped<ChargeCreationService>();
 builder.Services.AddScoped<FiscalInvoiceService>();
 builder.Services.AddScoped<ChargeHistoryService>();

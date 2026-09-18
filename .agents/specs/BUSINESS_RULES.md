@@ -35,6 +35,13 @@ Dados correntes do Evo
 Uma prévia Sandbox não consolida uma empresa como cobrada. Apenas uma execução
 de Produção bem-sucedida consolida a cobrança definitiva.
 
+A prévia financeira tem duas origens. O fluxo normal usa o catálogo local:
+colaboradores corporativos ativos com contrato reconhecido são agrupados por
+empresa e multiplicados pelo valor por colaborador configurado nela. A
+importação de planilha continua disponível como caminho excepcional para
+conferência ou contingência. As duas origens criam a mesma `BillingDraft` e
+seguem as mesmas etapas de revisão, aprovação e idempotência.
+
 ## Catálogo de empresas
 
 - A empresa é identificada pelo CNPJ normalizado, validado pelos dois dígitos

@@ -10,6 +10,7 @@ namespace Evoque.Billing.Api.Controllers;
 [Route("api")]
 public sealed class BillingDraftsController(
     BillingDraftService billingDraftService,
+    CorporateBillingDraftService corporateBillingDraftService,
     ChargeCreationService chargeCreationService) : ControllerBase
 {
     [HttpPost("billing-periods/{year:int}/{month:int}/drafts")]
@@ -44,6 +45,24 @@ public sealed class BillingDraftsController(
             cancellationToken);
 
         return Ok(billingDrafts.Select(BillingDraftResponse.FromDomain).ToArray());
+    }
+
+    /// <summary>
+    /// Gera as prévias da competência a partir da base de colaboradores e do
+    /// valor de cada empresa. Não recebe planilha.
+    /// </summary>
+    [HttpPost("billing-periods/{year:int}/{month:int}/corporate-drafts")]
+    [ProducesResponseType<GenerateCorporateBillingDraftsResponse>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<GenerateCorporateBillingDraftsResponse>> GenerateCorporateDraftsAsync(
+        int year,
+        int month,
+        CancellationToken cancellationToken)
+    {
+        var result = await corporateBillingDraftService.GenerateAsync(
+            new BillingPeriodReference(year, month),
+            User.GetOperatorId(),
+            cancellationToken);
+        return Ok(result);
     }
 
     [HttpGet("billing-drafts/{billingDraftId:guid}", Name = "GetBillingDraft")]

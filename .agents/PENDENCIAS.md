@@ -1,6 +1,6 @@
 # Pendências do Evoque Cobranças
 
-Atualizado em 15/09/2026.
+Atualizado em 18/09/2026.
 
 Este documento reúne o que foi levantado na reunião de apresentação e na
 auditoria do software feita antes dela. Cada item traz a evidência que o
@@ -81,8 +81,9 @@ que faltava.
   que determinado operador fez, ou o que aconteceu numa competência;
 - ela mostra apenas o que saiu daqui. As cobranças criadas no painel do Asaas —
   hoje a maioria — não têm competência nem prévia deste lado e ficam de fora;
-- o item **2.5** segue valendo: com o operador fixo em `"operador-web"`,
-  qualquer trilha de auditoria responde "operador-web" em toda linha.
+- desde 18/09/2026, os registros trazem o nome da sessão autenticada. Isso torna
+  uma futura consulta por operador útil, mas não cria a tela nem os filtros que
+  ainda faltam neste item.
 
 O restante desta seção continua válido.
 
@@ -211,25 +212,18 @@ ativas têm endereço completo no Asaas de produção, e exibir essa pendência 
 tela de empresas. O catálogo já guarda o endereço vindo da BrasilAPI, então a
 informação existe do nosso lado.
 
-### 2.5 Identificação de quem opera
+### 2.5 Identificação de quem opera — resolvido em 18/09/2026
 
 **Levantado na auditoria de interface.**
 
-`operatorId` está fixo no código do portal:
+O portal agora exige uma sessão autenticada por cookie. O operador é configurado
+no ambiente, e controllers leem sua identidade da sessão em vez de aceitar
+`operatorId` no JSON ou no formulário. A constante `"operador-web"` foi removida.
 
-```ts
-const operatorId = "operador-web";
-```
-
-Toda a auditoria — aprovar prévia, aprovar lote, digitar `CONFIRMAR` — registra
-o mesmo nome. Num sistema que cria cobrança real, a pergunta "quem autorizou?"
-não tem resposta.
-
-Isso reduz o valor do item 2.1: uma tela de auditoria mostraria "operador-web"
-em todas as linhas.
-
-**O que falta:** autenticação, ainda que simples, e o operador real viajando
-nas chamadas em vez da constante.
+A solução é temporária e foi isolada em `Authentication/` para ser substituída
+pelo Azure sem mudar services ou regras de domínio. O item 2.1 continua aberto
+por falta da consulta e da tela de auditoria, mas deixou de ser prejudicado por
+nomes fictícios.
 
 ---
 
@@ -410,6 +404,20 @@ Vicente de Paulo**, além de oito linhas sem CNPJ na coluna de empresa.
 
 Cada uma precisa de uma decisão: é cliente e falta cadastrar, ou não é.
 
+### 5.5 Definir operadores e gerar senhas
+
+Antes do deploy, combinar com a Evoque quem terá acesso ao portal e gerar uma
+senha aleatória para cada pessoa. A API exige ao menos um par
+`AUTH__USERS__n__USERNAME` / `AUTH__USERS__n__PASSWORD` e se recusa a subir com
+a lista vazia, para nunca transformar erro de configuração em sistema aberto.
+
+### 5.6 Forçar HTTPS na Cloudflare
+
+Ligar **Always Use HTTPS** no painel da Cloudflare. O cookie de sessão é sempre
+`Secure`; quem abrir `http://evoque.devarthur.com.br` não o envia e parece não
+conseguir entrar. O redirecionamento na borda evita esse sintoma sem reduzir a
+proteção do cookie.
+
 ---
 
 ## Prioridade sugerida
@@ -420,6 +428,5 @@ Cada uma precisa de uma decisão: é cliente e falta cadastrar, ou não é.
 4. **3.2** — elimina a conversão manual de planilha todo mês.
 5. **1.2** — cancelar prévia, que hoje só se resolve no banco.
 6. **2.4** — endereço do tomador, que faz a emissão falhar em produção sem aviso.
-7. **2.5** — identificação do operador, que dá sentido à auditoria.
-8. **2.3** — completar a simulação, preenchendo o endereço do cliente espelho.
-9. **2.2** — e-mail pela Azure, bloqueado por credencial.
+7. **2.3** — completar a simulação, preenchendo o endereço do cliente espelho.
+8. **2.2** — e-mail pela Azure, bloqueado por credencial.

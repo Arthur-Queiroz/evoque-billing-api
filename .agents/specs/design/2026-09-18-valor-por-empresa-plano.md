@@ -205,7 +205,7 @@ cd C:\prog\evoque\api
 dotnet test Evoque.Billing.slnx --no-restore
 ```
 
-Esperado: PASS, com os 9 casos novos.
+Esperado: PASS, com os 11 casos novos (os `Theory` multiplicam as linhas).
 
 - [ ] **Step 5: Commit**
 
@@ -1028,6 +1028,11 @@ namespace Evoque.Billing.Api.Services;
 /// Cria as prévias da competência a partir da base de colaboradores e do valor
 /// combinado com cada empresa.
 ///
+/// Não confundir com <see cref="CorporateBillingPreviewService"/>, que lê a API
+/// do EVO e é diagnóstico: a validação de julho/2026 encontrou contratos
+/// corporativos reais sem recebíveis e sem valores por aquele caminho. Este aqui
+/// lê a base local de colaboradores, que é mantida pela importação e é confiável.
+///
 /// Não lê planilha. O que ele produz é exatamente a composição que a importação
 /// do EVO já mostrou ao operador — e é por isso que a conferência acontece lá,
 /// antes, e não aqui.
@@ -1196,7 +1201,7 @@ dotnet build Evoque.Billing.slnx --no-restore -warnaserror
 dotnet test Evoque.Billing.slnx --no-restore
 ```
 
-Esperado: PASS, com os 9 casos novos. O primeiro é o que mais importa: se
+Esperado: PASS, com os 11 casos novos (os `Theory` multiplicam as linhas). O primeiro é o que mais importa: se
 `ReproducesTheClosingsDoneByHand` falhar, o cálculo divergiu do que a operação já
 conferiu à mão.
 

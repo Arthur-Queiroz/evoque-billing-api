@@ -1,3 +1,4 @@
+using Evoque.Billing.Api.Authentication;
 using Evoque.Billing.Api.Contracts;
 using Evoque.Billing.Api.Services;
 using Microsoft.AspNetCore.Mvc;
@@ -41,7 +42,10 @@ public sealed class CompaniesController(
         CreateCompanyRequest request,
         CancellationToken cancellationToken)
     {
-        var company = await companyCatalogService.CreateAsync(request, cancellationToken);
+        var company = await companyCatalogService.CreateAsync(
+            request,
+            User.GetOperatorId(),
+            cancellationToken);
 
         // Rota nomeada, como nos demais controllers. CreatedAtAction(nameof(GetAsync))
         // não funciona: o ASP.NET remove o sufixo "Async" do nome da action, então
@@ -58,7 +62,11 @@ public sealed class CompaniesController(
         UpdateCompanyRequest request,
         CancellationToken cancellationToken)
     {
-        var company = await companyCatalogService.UpdateAsync(taxId, request, cancellationToken);
+        var company = await companyCatalogService.UpdateAsync(
+            taxId,
+            request,
+            User.GetOperatorId(),
+            cancellationToken);
         return Ok(company);
     }
 
@@ -66,10 +74,12 @@ public sealed class CompaniesController(
     [ProducesResponseType<CompanyResponse>(StatusCodes.Status200OK)]
     public async Task<ActionResult<CompanyResponse>> DeactivateAsync(
         string taxId,
-        CompanyOperatorRequest request,
         CancellationToken cancellationToken)
     {
-        var company = await companyCatalogService.DeactivateAsync(taxId, request, cancellationToken);
+        var company = await companyCatalogService.DeactivateAsync(
+            taxId,
+            User.GetOperatorId(),
+            cancellationToken);
         return Ok(company);
     }
 
@@ -77,10 +87,12 @@ public sealed class CompaniesController(
     [ProducesResponseType<CompanyResponse>(StatusCodes.Status200OK)]
     public async Task<ActionResult<CompanyResponse>> ReactivateAsync(
         string taxId,
-        CompanyOperatorRequest request,
         CancellationToken cancellationToken)
     {
-        var company = await companyCatalogService.ReactivateAsync(taxId, request, cancellationToken);
+        var company = await companyCatalogService.ReactivateAsync(
+            taxId,
+            User.GetOperatorId(),
+            cancellationToken);
         return Ok(company);
     }
 
@@ -91,7 +103,11 @@ public sealed class CompaniesController(
         SetCompanyIssRetentionRequest request,
         CancellationToken cancellationToken)
     {
-        var company = await companyCatalogService.SetIssRetentionAsync(taxId, request, cancellationToken);
+        var company = await companyCatalogService.SetIssRetentionAsync(
+            taxId,
+            request,
+            User.GetOperatorId(),
+            cancellationToken);
         return Ok(company);
     }
 
@@ -99,10 +115,12 @@ public sealed class CompaniesController(
     [ProducesResponseType<CompanyResponse>(StatusCodes.Status200OK)]
     public async Task<ActionResult<CompanyResponse>> RefreshRegistryAsync(
         string taxId,
-        CompanyOperatorRequest request,
         CancellationToken cancellationToken)
     {
-        var company = await companyCatalogService.RefreshRegistryAsync(taxId, request, cancellationToken);
+        var company = await companyCatalogService.RefreshRegistryAsync(
+            taxId,
+            User.GetOperatorId(),
+            cancellationToken);
         return Ok(company);
     }
 
@@ -117,6 +135,7 @@ public sealed class CompaniesController(
         var synchronization = await companyAsaasSynchronizationService.SynchronizeSandboxAsync(
             taxId,
             request,
+            User.GetOperatorId(),
             cancellationToken);
         return synchronization.CreatedNow
             ? StatusCode(StatusCodes.Status201Created, synchronization)
@@ -131,12 +150,11 @@ public sealed class CompaniesController(
     [ProducesResponseType<CompanyAsaasSynchronizationResponse>(StatusCodes.Status200OK)]
     public async Task<ActionResult<CompanyAsaasSynchronizationResponse>> SynchronizeAsaasProductionAsync(
         string taxId,
-        CompanyOperatorRequest request,
         CancellationToken cancellationToken)
     {
         var synchronization = await companyAsaasSynchronizationService.SynchronizeProductionAsync(
             taxId,
-            request,
+            User.GetOperatorId(),
             cancellationToken);
         return Ok(synchronization);
     }

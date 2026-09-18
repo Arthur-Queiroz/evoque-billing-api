@@ -11,6 +11,7 @@ public sealed class CompanyBillingScheduleService(
     public async Task<CompanyBillingScheduleResponse> UpsertAsync(
         string externalCompanyId,
         UpsertCompanyBillingScheduleRequest request,
+        string operatorId,
         CancellationToken cancellationToken)
     {
         var updatedAt = DateTimeOffset.UtcNow;
@@ -18,13 +19,13 @@ public sealed class CompanyBillingScheduleService(
             externalCompanyId,
             request.ClosingDay,
             request.IsActive,
-            request.OperatorId,
+            operatorId,
             updatedAt);
         await companyBillingScheduleRepository.UpsertAsync(companyBillingSchedule, cancellationToken);
         await auditLogRepository.AddAsync(
             AuditLog.Create(
                 "company-billing-schedule.updated",
-                request.OperatorId,
+                operatorId,
                 updatedAt,
                 null,
                 null,

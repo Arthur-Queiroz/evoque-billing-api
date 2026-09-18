@@ -15,23 +15,16 @@ public sealed record ListCompaniesQuery(
 public sealed record CreateCompanyRequest(
     string TaxId,
     string? DisplayName,
-    int? ClosingDay,
-    string OperatorId);
+    int? ClosingDay);
 
 public sealed record UpdateCompanyRequest(
     string DisplayName,
-    int? ClosingDay,
-    string OperatorId);
-
-/// <summary>Corpo das ações que só precisam saber quem é o responsável.</summary>
-public sealed record CompanyOperatorRequest(string OperatorId);
+    int? ClosingDay);
 
 /// <summary>Liga ou desliga a retenção de ISS da empresa nas notas fiscais.</summary>
-public sealed record SetCompanyIssRetentionRequest(bool RetainsIss, string OperatorId);
+public sealed record SetCompanyIssRetentionRequest(bool RetainsIss);
 
-public sealed record SynchronizeCompanyAsaasSandboxRequest(
-    string Email,
-    string OperatorId);
+public sealed record SynchronizeCompanyAsaasSandboxRequest(string Email);
 
 public sealed record CompanyAsaasSynchronizationResponse(
     string Environment,

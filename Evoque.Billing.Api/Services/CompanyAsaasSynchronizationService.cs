@@ -21,6 +21,7 @@ public sealed class CompanyAsaasSynchronizationService(
     public async Task<CompanyAsaasSynchronizationResponse> SynchronizeSandboxAsync(
         string taxId,
         SynchronizeCompanyAsaasSandboxRequest request,
+        string operatorId,
         CancellationToken cancellationToken)
     {
         var company = await RequireCompanyAsync(taxId, cancellationToken);
@@ -58,7 +59,7 @@ public sealed class CompanyAsaasSynchronizationService(
             company,
             AsaasEnvironment.Sandbox,
             customer,
-            request.OperatorId,
+            operatorId,
             createdNow,
             cancellationToken);
         return new CompanyAsaasSynchronizationResponse(
@@ -74,7 +75,7 @@ public sealed class CompanyAsaasSynchronizationService(
 
     public async Task<CompanyAsaasSynchronizationResponse> SynchronizeProductionAsync(
         string taxId,
-        CompanyOperatorRequest request,
+        string operatorId,
         CancellationToken cancellationToken)
     {
         var company = await RequireCompanyAsync(taxId, cancellationToken);
@@ -87,7 +88,7 @@ public sealed class CompanyAsaasSynchronizationService(
         {
             await RegisterLookupAuditAsync(
                 company,
-                request.OperatorId,
+                operatorId,
                 "company.asaas-production-not-found",
                 "Nenhum cliente de produção foi encontrado pelo CNPJ. Nenhum dado foi criado no Asaas.",
                 cancellationToken);
@@ -104,7 +105,7 @@ public sealed class CompanyAsaasSynchronizationService(
         {
             await RegisterLookupAuditAsync(
                 company,
-                request.OperatorId,
+                operatorId,
                 "company.asaas-production-ambiguous",
                 $"{lookupResult.MatchCount} clientes de produção foram encontrados para o mesmo CNPJ.",
                 cancellationToken);
@@ -123,7 +124,7 @@ public sealed class CompanyAsaasSynchronizationService(
             company,
             AsaasEnvironment.Production,
             customer,
-            request.OperatorId,
+            operatorId,
             createdNow: false,
             cancellationToken);
         return new CompanyAsaasSynchronizationResponse(

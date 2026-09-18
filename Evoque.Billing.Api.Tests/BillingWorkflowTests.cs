@@ -432,20 +432,21 @@ public sealed class BillingWorkflowTests
         await services.BillingDraftService.ApproveAsync(closingDayTwoDraft.Id, "maria", CancellationToken.None);
         await services.CompanyBillingScheduleService.UpsertAsync(
             "empresa-fechamento-20",
-            new UpsertCompanyBillingScheduleRequest(20, true, "maria"),
+            new UpsertCompanyBillingScheduleRequest(20, true),
+            "maria",
             CancellationToken.None);
         await services.CompanyBillingScheduleService.UpsertAsync(
             "empresa-fechamento-02",
-            new UpsertCompanyBillingScheduleRequest(2, true, "maria"),
+            new UpsertCompanyBillingScheduleRequest(2, true),
+            "maria",
             CancellationToken.None);
 
         var preview = await services.ScheduledChargeBatchService.CreatePreviewAsync(
             billingPeriodReference,
-                new CreateScheduledChargeBatchPreviewRequest(
-                    "maria",
-                    20,
-                    new DateOnly(2026, 9, 2),
-                    "Sandbox"),
+            new CreateScheduledChargeBatchPreviewRequest(
+                20,
+                new DateOnly(2026, 9, 2),
+                "Sandbox"),
             "maria",
             CancellationToken.None);
 
@@ -464,7 +465,6 @@ public sealed class BillingWorkflowTests
             services.ScheduledChargeBatchService.CreatePreviewAsync(
                 billingPeriodReference,
                 new CreateScheduledChargeBatchPreviewRequest(
-                    "maria",
                     25,
                     new DateOnly(2026, 8, 10),
                     "Sandbox"),
@@ -496,22 +496,23 @@ public sealed class BillingWorkflowTests
         await services.BillingDraftService.ApproveAsync(unscheduledDraft.Id, "maria", CancellationToken.None);
         await services.CompanyBillingScheduleService.UpsertAsync(
             "empresa-dia-20",
-            new UpsertCompanyBillingScheduleRequest(20, true, "maria"),
+            new UpsertCompanyBillingScheduleRequest(20, true),
+            "maria",
             CancellationToken.None);
         await services.CompanyBillingScheduleService.UpsertAsync(
             "empresa-dia-02",
-            new UpsertCompanyBillingScheduleRequest(2, true, "maria"),
+            new UpsertCompanyBillingScheduleRequest(2, true),
+            "maria",
             CancellationToken.None);
 
         // Fechamento no dia 20 de agosto, vencimento em 5 de setembro: é assim
         // que as cobranças reais aparecem no Asaas.
         var preview = await services.ScheduledChargeBatchService.CreatePreviewAsync(
             billingPeriodReference,
-                new CreateScheduledChargeBatchPreviewRequest(
-                    "maria",
-                    20,
-                    new DateOnly(2026, 9, 5),
-                    "Sandbox"),
+            new CreateScheduledChargeBatchPreviewRequest(
+                20,
+                new DateOnly(2026, 9, 5),
+                "Sandbox"),
             "maria",
             CancellationToken.None);
 
@@ -536,7 +537,8 @@ public sealed class BillingWorkflowTests
         await services.BillingDraftService.ApproveAsync(billingDraft.Id, "maria", CancellationToken.None);
         await services.CompanyBillingScheduleService.UpsertAsync(
             openSportsTaxId,
-            new UpsertCompanyBillingScheduleRequest(20, true, "maria"),
+            new UpsertCompanyBillingScheduleRequest(20, true),
+            "maria",
             CancellationToken.None);
 
         // A empresa é inativada no catálogo, mas a agenda ativa permanece.
@@ -552,7 +554,6 @@ public sealed class BillingWorkflowTests
             services.ScheduledChargeBatchService.CreatePreviewAsync(
                 billingPeriodReference,
                 new CreateScheduledChargeBatchPreviewRequest(
-                    "maria",
                     20,
                     new DateOnly(2026, 9, 5),
                     "Sandbox"),

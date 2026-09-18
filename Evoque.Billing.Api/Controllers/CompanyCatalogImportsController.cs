@@ -1,3 +1,4 @@
+using Evoque.Billing.Api.Authentication;
 using Evoque.Billing.Api.Contracts;
 using Evoque.Billing.Api.Services;
 using Microsoft.AspNetCore.Mvc;
@@ -30,13 +31,12 @@ public sealed class CompanyCatalogImportsController(
     [ProducesResponseType<CompanyCatalogImportResponse>(StatusCodes.Status201Created)]
     public async Task<ActionResult<CompanyCatalogImportResponse>> SynchronizeAsync(
         [FromForm] IFormFile file,
-        [FromForm] string operatorId,
         [FromForm] bool completeSnapshotConfirmed,
         CancellationToken cancellationToken)
     {
         var result = await companyCatalogImportService.SynchronizeAsync(
             file,
-            operatorId,
+            User.GetOperatorId(),
             completeSnapshotConfirmed,
             cancellationToken);
         return StatusCode(StatusCodes.Status201Created, result);

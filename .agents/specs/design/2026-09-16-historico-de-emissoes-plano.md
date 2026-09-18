@@ -1705,6 +1705,7 @@ const chargePaymentLabels: Record<string, string> = {
   Received: "Pago",
   Confirmed: "Pago",
   Overdue: "Vencido",
+  RefundRequested: "Estorno solicitado",
   Refunded: "Estornado",
 };
 

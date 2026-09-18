@@ -16,6 +16,7 @@ public sealed class DatabaseSchemaInitializer(MySqlConnectionFactory connectionF
     private const string CompanyIssRetentionMigrationId = "010_add_company_iss_retention";
     private const string FiscalInvoiceEnvironmentMigrationId = "011_add_fiscal_invoice_environment";
     private const string FiscalInvoiceDocumentsMigrationId = "012_add_fiscal_invoice_documents";
+    private const string ChargePaymentStatusMigrationId = "013_add_charge_payment_status";
 
     public async Task InitializeAsync(CancellationToken cancellationToken)
     {
@@ -198,6 +199,43 @@ public sealed class DatabaseSchemaInitializer(MySqlConnectionFactory connectionF
         await AddCompanyIssRetentionAsync(connection, cancellationToken);
         await AddFiscalInvoiceEnvironmentAsync(connection, cancellationToken);
         await AddFiscalInvoiceDocumentsAsync(connection, cancellationToken);
+        await AddChargePaymentStatusAsync(connection, cancellationToken);
+    }
+
+    /// <summary>
+    /// Situação de pagamento do boleto, para o histórico responder o que foi
+    /// pago. As cobranças que já existem nascem `Unknown`, e isso é a verdade
+    /// sobre elas: nenhuma foi consultada no Asaas até agora.
+    /// </summary>
+    private static async Task AddChargePaymentStatusAsync(
+        MySqlConnection connection,
+        CancellationToken cancellationToken)
+    {
+        if (await IsAppliedAsync(connection, ChargePaymentStatusMigrationId, cancellationToken))
+        {
+            return;
+        }
+
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        // A checagem de coluna existe porque a 009 já foi editada depois de
+        // aplicada uma vez neste projeto, e a subida quebrou com "duplicate
+        // column". Repetir o ALTER passa a ser inofensivo.
+        if (!await ColumnExistsAsync(connection, transaction, "charge_batch_items", "payment_status", cancellationToken))
+        {
+            await ExecuteAsync(connection, """
+                ALTER TABLE charge_batch_items
+                ADD COLUMN payment_status VARCHAR(32) NOT NULL DEFAULT 'Unknown' AFTER error_message,
+                ADD COLUMN paid_at DATE NULL AFTER payment_status;
+                """, transaction, cancellationToken);
+        }
+
+        await InsertMigrationAsync(
+            connection,
+            transaction,
+            ChargePaymentStatusMigrationId,
+            cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
     }
 
     /// <summary>

@@ -150,15 +150,17 @@ public sealed class MySqlChargeBatchRepository(MySqlConnectionFactory connection
         const string commandText = """
             INSERT INTO charge_batch_items
                 (charge_batch_id, billing_draft_id, status, asaas_payment_id, bank_slip_url,
-                 error_message, updated_at)
+                 error_message, payment_status, paid_at, updated_at)
             VALUES
                 (@chargeBatchId, @billingDraftId, @status, @asaasPaymentId, @bankSlipUrl,
-                 @errorMessage, @updatedAt)
+                 @errorMessage, @paymentStatus, @paidAt, @updatedAt)
             ON DUPLICATE KEY UPDATE
                 status = VALUES(status),
                 asaas_payment_id = VALUES(asaas_payment_id),
                 bank_slip_url = VALUES(bank_slip_url),
                 error_message = VALUES(error_message),
+                payment_status = VALUES(payment_status),
+                paid_at = VALUES(paid_at),
                 updated_at = VALUES(updated_at);
             """;
 
@@ -169,6 +171,12 @@ public sealed class MySqlChargeBatchRepository(MySqlConnectionFactory connection
         command.Parameters.AddWithValue("@asaasPaymentId", chargeBatchItem.AsaasPaymentId ?? (object)DBNull.Value);
         command.Parameters.AddWithValue("@bankSlipUrl", chargeBatchItem.BankSlipUrl ?? (object)DBNull.Value);
         command.Parameters.AddWithValue("@errorMessage", chargeBatchItem.ErrorMessage ?? (object)DBNull.Value);
+        command.Parameters.AddWithValue("@paymentStatus", chargeBatchItem.PaymentStatus.ToString());
+        command.Parameters.AddWithValue(
+            "@paidAt",
+            chargeBatchItem.PaidAt.HasValue
+                ? chargeBatchItem.PaidAt.Value.ToDateTime(TimeOnly.MinValue)
+                : (object)DBNull.Value);
         command.Parameters.AddWithValue("@updatedAt", chargeBatchItem.UpdatedAt.UtcDateTime);
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
@@ -179,7 +187,8 @@ public sealed class MySqlChargeBatchRepository(MySqlConnectionFactory connection
         CancellationToken cancellationToken)
     {
         const string commandText = """
-            SELECT billing_draft_id, status, asaas_payment_id, bank_slip_url, error_message, updated_at
+            SELECT billing_draft_id, status, asaas_payment_id, bank_slip_url, error_message,
+                   payment_status, paid_at, updated_at
             FROM charge_batch_items
             WHERE charge_batch_id = @chargeBatchId
             ORDER BY billing_draft_id;
@@ -197,11 +206,8 @@ public sealed class MySqlChargeBatchRepository(MySqlConnectionFactory connection
                 GetNullableString(reader, "asaas_payment_id"),
                 GetNullableString(reader, "bank_slip_url"),
                 GetNullableString(reader, "error_message"),
-                // A tabela ainda não tem colunas de pagamento: até a Task 6 criar
-                // e ler `payment_status`/`paid_at`, o que o banco sabe sobre o
-                // pagamento é exatamente nada.
-                ChargePaymentStatus.Unknown,
-                null,
+                Enum.Parse<ChargePaymentStatus>(reader.GetString("payment_status")),
+                GetNullableDateOnly(reader, "paid_at"),
                 GetUtcDateTime(reader, "updated_at")));
         }
 
@@ -246,6 +252,13 @@ public sealed class MySqlChargeBatchRepository(MySqlConnectionFactory connection
     private static string? GetNullableString(MySqlDataReader reader, string columnName)
     {
         return reader.IsDBNull(reader.GetOrdinal(columnName)) ? null : reader.GetString(columnName);
+    }
+
+    private static DateOnly? GetNullableDateOnly(MySqlDataReader reader, string columnName)
+    {
+        return reader.IsDBNull(reader.GetOrdinal(columnName))
+            ? null
+            : DateOnly.FromDateTime(reader.GetDateTime(columnName));
     }
 
     private static Guid? GetNullableGuid(MySqlDataReader reader, string columnName)

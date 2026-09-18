@@ -1,3 +1,4 @@
+using Evoque.Billing.Api.Authentication;
 using Evoque.Billing.Api.Contracts;
 using Evoque.Billing.Api.Services;
 using Microsoft.AspNetCore.Mvc;
@@ -33,10 +34,9 @@ public sealed class ChargeHistoryController(
     [HttpPost("synchronize")]
     [ProducesResponseType<IReadOnlyCollection<ChargeHistoryEntryResponse>>(StatusCodes.Status200OK)]
     public async Task<ActionResult<IReadOnlyCollection<ChargeHistoryEntryResponse>>> SynchronizeAsync(
-        SynchronizeChargeHistoryRequest request,
         CancellationToken cancellationToken)
     {
-        await chargePaymentSynchronizationService.SynchronizeAsync(request.OperatorId, cancellationToken);
+        await chargePaymentSynchronizationService.SynchronizeAsync(User.GetOperatorId(), cancellationToken);
         var historico = await chargeHistoryService.ListAsync(new ChargeHistoryQuery(), cancellationToken);
         return Ok(historico);
     }

@@ -48,6 +48,8 @@ services:
       Evo__BaseUrl: https://evo-integracao-api.w12app.com.br
       Evo__Username: ${EVO__USERNAME:-}
       Evo__ApiKey: ${EVO__APIKEY:-}
+      Auth__Users__0__Username: ${AUTH__USERS__0__USERNAME}
+      Auth__Users__0__Password: ${AUTH__USERS__0__PASSWORD}
     restart: unless-stopped
     networks:
       - internal

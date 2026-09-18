@@ -1,3 +1,4 @@
+using Evoque.Billing.Api.Authentication;
 using Evoque.Billing.Api.Domain;
 using Evoque.Billing.Api.Integrations.Asaas;
 using Evoque.Billing.Api.Integrations.Evo;
@@ -10,10 +11,15 @@ public sealed class StartupConfigurationValidator(
     IConfiguration configuration,
     IOptions<AsaasOptions> asaasOptions,
     IOptions<EvoOptions> evoOptions,
-    IOptions<FiscalInvoiceOptions> fiscalInvoiceOptions)
+    IOptions<FiscalInvoiceOptions> fiscalInvoiceOptions,
+    IOptions<OperatorAccountOptions> operatorAccountOptions)
 {
     public void Validate()
     {
+        // Primeiro de tudo: sem operador configurado o sistema subiria aberto, e
+        // é o único erro aqui cuja consequência é pior que não subir.
+        operatorAccountOptions.Value.Validate();
+
         var configuredAsaasOptions = asaasOptions.Value;
         if (!Uri.TryCreate(configuredAsaasOptions.BaseUrl, UriKind.Absolute, out var asaasBaseUri)
             || asaasBaseUri.Scheme != Uri.UriSchemeHttps)

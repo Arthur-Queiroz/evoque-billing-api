@@ -1,3 +1,4 @@
+using Evoque.Billing.Api.Authentication;
 using Evoque.Billing.Api.Contracts;
 using Evoque.Billing.Api.Domain;
 using Evoque.Billing.Api.Services;
@@ -20,6 +21,7 @@ public sealed class CompanyBillingSchedulesController(CompanyBillingScheduleServ
         var companyBillingSchedule = await companyBillingScheduleService.UpsertAsync(
             externalCompanyId,
             request,
+            User.GetOperatorId(),
             cancellationToken);
         return Ok(companyBillingSchedule);
     }

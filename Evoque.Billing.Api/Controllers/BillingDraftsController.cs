@@ -1,3 +1,4 @@
+using Evoque.Billing.Api.Authentication;
 using Evoque.Billing.Api.Contracts;
 using Evoque.Billing.Api.Domain;
 using Evoque.Billing.Api.Services;
@@ -22,7 +23,7 @@ public sealed class BillingDraftsController(
         var billingDraft = await billingDraftService.CreateAsync(
             new BillingPeriodReference(year, month),
             request.ToCommand(),
-            request.OperatorId,
+            User.GetOperatorId(),
             cancellationToken);
 
         return CreatedAtRoute(
@@ -59,12 +60,11 @@ public sealed class BillingDraftsController(
     [ProducesResponseType<BillingDraftResponse>(StatusCodes.Status200OK)]
     public async Task<ActionResult<BillingDraftResponse>> ApproveAsync(
         Guid billingDraftId,
-        ApproveBillingDraftRequest request,
         CancellationToken cancellationToken)
     {
         var billingDraft = await billingDraftService.ApproveAsync(
             billingDraftId,
-            request.OperatorId,
+            User.GetOperatorId(),
             cancellationToken);
 
         return Ok(BillingDraftResponse.FromDomain(billingDraft));
@@ -79,7 +79,7 @@ public sealed class BillingDraftsController(
         var result = await chargeCreationService.CreateAsync(
             billingDraftId,
             request.DueDate,
-            request.OperatorId,
+            User.GetOperatorId(),
             request.ConfirmationPhrase,
             AsaasEnvironment.Sandbox,
             cancellationToken);

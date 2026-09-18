@@ -15,12 +15,13 @@ public sealed class ChargeBatchService(
 {
     public async Task<ChargeBatchResponse> CreatePreviewAsync(
         CreateChargeBatchPreviewRequest request,
+        string operatorId,
         CancellationToken cancellationToken)
     {
         var asaasEnvironment = ParseAsaasEnvironment(request.AsaasEnvironment);
         var billingDraftIds = NormalizeBillingDraftIds(request.BillingDraftIds);
         var chargeBatch = await CreatePreviewForBillingDraftsAsync(
-            request.OperatorId,
+            operatorId,
             request.DueDate,
             asaasEnvironment,
             billingDraftIds,
@@ -34,38 +35,40 @@ public sealed class ChargeBatchService(
     // Novas telas devem usar prévia, aprovação e execução em etapas separadas.
     public async Task<ChargeBatchResponse> CreateAsync(
         CreateChargeBatchRequest request,
+        string operatorId,
         CancellationToken cancellationToken)
     {
         EnsureConfirmationPhrase(request.ConfirmationPhrase);
         var billingDraftIds = NormalizeBillingDraftIds(request.BillingDraftIds);
         var chargeBatch = await CreatePreviewForBillingDraftsAsync(
-            request.OperatorId,
+            operatorId,
             request.DueDate,
             AsaasEnvironment.Sandbox,
             billingDraftIds,
             null,
             cancellationToken);
 
-        await ApproveAsync(chargeBatch.Id, new ApproveChargeBatchRequest(request.OperatorId), cancellationToken);
+        await ApproveAsync(chargeBatch.Id, operatorId, cancellationToken);
         return await ExecuteAsync(
             chargeBatch.Id,
-            new ExecuteChargeBatchRequest(request.OperatorId, request.ConfirmationPhrase),
+            new ExecuteChargeBatchRequest(request.ConfirmationPhrase),
+            operatorId,
             cancellationToken);
     }
 
     public async Task<ChargeBatchResponse> ApproveAsync(
         Guid chargeBatchId,
-        ApproveChargeBatchRequest request,
+        string operatorId,
         CancellationToken cancellationToken)
     {
         var chargeBatch = await FindChargeBatchAsync(chargeBatchId, cancellationToken);
         var approvedAt = DateTimeOffset.UtcNow;
-        chargeBatch.Approve(request.OperatorId, approvedAt);
+        chargeBatch.Approve(operatorId, approvedAt);
         await chargeBatchRepository.UpdateAsync(chargeBatch, cancellationToken);
         await auditLogRepository.AddAsync(
             AuditLog.Create(
                 "charge-batch.approved",
-                request.OperatorId,
+                operatorId,
                 approvedAt,
                 chargeBatch.BillingPeriodId,
                 null,
@@ -78,6 +81,7 @@ public sealed class ChargeBatchService(
     public async Task<ChargeBatchResponse> ExecuteAsync(
         Guid chargeBatchId,
         ExecuteChargeBatchRequest request,
+        string operatorId,
         CancellationToken cancellationToken)
     {
         EnsureConfirmationPhrase(request.ConfirmationPhrase);
@@ -87,7 +91,7 @@ public sealed class ChargeBatchService(
         await auditLogRepository.AddAsync(
             AuditLog.Create(
                 "charge-batch.execution-started",
-                request.OperatorId,
+                operatorId,
                 chargeBatch.UpdatedAt,
                 chargeBatch.BillingPeriodId,
                 null,
@@ -96,7 +100,7 @@ public sealed class ChargeBatchService(
 
         foreach (var chargeBatchItem in chargeBatch.Items)
         {
-            await ExecuteItemAsync(chargeBatch, chargeBatchItem.BillingDraftId, request.OperatorId, cancellationToken);
+            await ExecuteItemAsync(chargeBatch, chargeBatchItem.BillingDraftId, operatorId, cancellationToken);
         }
 
         chargeBatch.MarkCompleted(DateTimeOffset.UtcNow);
@@ -104,7 +108,7 @@ public sealed class ChargeBatchService(
         await auditLogRepository.AddAsync(
             AuditLog.Create(
                 "charge-batch.completed",
-                request.OperatorId,
+                operatorId,
                 chargeBatch.UpdatedAt,
                 chargeBatch.BillingPeriodId,
                 null,
@@ -117,6 +121,7 @@ public sealed class ChargeBatchService(
     public async Task<ChargeBatchResponse> RetryFailedAsync(
         Guid chargeBatchId,
         RetryFailedChargeBatchRequest request,
+        string operatorId,
         CancellationToken cancellationToken)
     {
         EnsureConfirmationPhrase(request.ConfirmationPhrase);
@@ -131,18 +136,19 @@ public sealed class ChargeBatchService(
         }
 
         var retryChargeBatch = await CreatePreviewForBillingDraftsAsync(
-            request.OperatorId,
+            operatorId,
             originalChargeBatch.DueDate,
             originalChargeBatch.AsaasEnvironment,
             failedBillingDraftIds,
             originalChargeBatch.Id,
             cancellationToken);
-        retryChargeBatch.Approve(request.OperatorId, DateTimeOffset.UtcNow);
+        retryChargeBatch.Approve(operatorId, DateTimeOffset.UtcNow);
         await chargeBatchRepository.UpdateAsync(retryChargeBatch, cancellationToken);
 
         return await ExecuteAsync(
             retryChargeBatch.Id,
-            new ExecuteChargeBatchRequest(request.OperatorId, request.ConfirmationPhrase),
+            new ExecuteChargeBatchRequest(request.ConfirmationPhrase),
+            operatorId,
             cancellationToken);
     }
 

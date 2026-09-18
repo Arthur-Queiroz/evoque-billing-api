@@ -2,8 +2,6 @@ using Evoque.Billing.Api.Domain;
 
 namespace Evoque.Billing.Api.Contracts;
 
-public sealed record CreateBillingPeriodRequest(string OperatorId);
-
 public sealed record BillingPeriodResponse(
     Guid Id,
     int Year,

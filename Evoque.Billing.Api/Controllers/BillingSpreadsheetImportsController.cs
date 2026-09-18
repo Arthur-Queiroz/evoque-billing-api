@@ -1,3 +1,4 @@
+using Evoque.Billing.Api.Authentication;
 using Evoque.Billing.Api.Contracts;
 using Evoque.Billing.Api.Domain;
 using Evoque.Billing.Api.Services;
@@ -31,14 +32,13 @@ public sealed class BillingSpreadsheetImportsController(
         int year,
         int month,
         [FromForm] IFormFile file,
-        [FromForm] string operatorId,
         [FromForm] string? asaasCustomerId,
         CancellationToken cancellationToken)
     {
         var result = await billingSpreadsheetImportService.CreateDraftsAsync(
             new BillingPeriodReference(year, month),
             file,
-            operatorId,
+            User.GetOperatorId(),
             asaasCustomerId,
             cancellationToken);
         return StatusCode(StatusCodes.Status201Created, result);

@@ -4,8 +4,7 @@ namespace Evoque.Billing.Api.Contracts;
 
 public sealed record UpsertCompanyBillingScheduleRequest(
     int ClosingDay,
-    bool IsActive,
-    string OperatorId);
+    bool IsActive);
 
 public sealed record CompanyBillingScheduleResponse(
     string ExternalCompanyId,
@@ -32,7 +31,6 @@ public sealed record CompanyBillingScheduleResponse(
 /// fechamento, quase sempre no mês seguinte.
 /// </summary>
 public sealed record CreateScheduledChargeBatchPreviewRequest(
-    string OperatorId,
     int ClosingDay,
     DateOnly DueDate,
     string AsaasEnvironment);

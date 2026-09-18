@@ -129,10 +129,10 @@ public sealed class FiscalInvoiceServiceTests
 
         await context.ChargeBatchService.CreateAsync(
             new CreateChargeBatchRequest(
-                OperatorId,
                 new DateOnly(2026, 9, 10),
                 "CONFIRMAR",
                 [context.BillingDraftId]),
+            OperatorId,
             CancellationToken.None);
 
         var fiscalInvoice = Assert.Single(await context.FiscalInvoiceRepository.ListByBillingPeriodIdAsync(
@@ -354,7 +354,8 @@ public sealed class FiscalInvoiceServiceTests
 
         await Assert.ThrowsAsync<ValidationException>(() => context.FiscalInvoiceService.ReissueAsync(
             failedInvoice.Id,
-            new ReissueFiscalInvoiceRequest(OperatorId, ""),
+            new ReissueFiscalInvoiceRequest(""),
+            OperatorId,
             CancellationToken.None));
     }
 
@@ -379,7 +380,8 @@ public sealed class FiscalInvoiceServiceTests
 
         await Assert.ThrowsAsync<ConflictException>(() => context.FiscalInvoiceService.ReissueAsync(
             authorizedInvoice.Id,
-            new ReissueFiscalInvoiceRequest(OperatorId, "CONFIRMAR"),
+            new ReissueFiscalInvoiceRequest("CONFIRMAR"),
+            OperatorId,
             CancellationToken.None));
     }
 
@@ -408,7 +410,8 @@ public sealed class FiscalInvoiceServiceTests
 
         var reissuedInvoice = await context.FiscalInvoiceService.ReissueAsync(
             failedInvoice.Id,
-            new ReissueFiscalInvoiceRequest(OperatorId, "CONFIRMAR"),
+            new ReissueFiscalInvoiceRequest("CONFIRMAR"),
+            OperatorId,
             CancellationToken.None);
 
         Assert.Equal(2, reissuedInvoice.Sequence);
@@ -437,13 +440,15 @@ public sealed class FiscalInvoiceServiceTests
         invoiceGateway.StopFailing();
         await context.FiscalInvoiceService.ReissueAsync(
             firstInvoice.Id,
-            new ReissueFiscalInvoiceRequest(OperatorId, "CONFIRMAR"),
+            new ReissueFiscalInvoiceRequest("CONFIRMAR"),
+            OperatorId,
             CancellationToken.None);
         var scheduleCallCountAfterSuccessfulReissue = invoiceGateway.ScheduleCallCount;
 
         await Assert.ThrowsAsync<ConflictException>(() => context.FiscalInvoiceService.ReissueAsync(
             firstInvoice.Id,
-            new ReissueFiscalInvoiceRequest(OperatorId, "CONFIRMAR"),
+            new ReissueFiscalInvoiceRequest("CONFIRMAR"),
+            OperatorId,
             CancellationToken.None));
         Assert.Equal(scheduleCallCountAfterSuccessfulReissue, invoiceGateway.ScheduleCallCount);
     }
@@ -459,18 +464,19 @@ public sealed class FiscalInvoiceServiceTests
     {
         var chargeBatch = await context.ChargeBatchService.CreatePreviewAsync(
             new CreateChargeBatchPreviewRequest(
-                OperatorId,
                 new DateOnly(2026, 9, 10),
                 "Production",
                 [context.BillingDraftId]),
+            OperatorId,
             CancellationToken.None);
         await context.ChargeBatchService.ApproveAsync(
             chargeBatch.Id,
-            new ApproveChargeBatchRequest(OperatorId),
+            OperatorId,
             CancellationToken.None);
         return await context.ChargeBatchService.ExecuteAsync(
             chargeBatch.Id,
-            new ExecuteChargeBatchRequest(OperatorId, "CONFIRMAR"),
+            new ExecuteChargeBatchRequest("CONFIRMAR"),
+            OperatorId,
             CancellationToken.None);
     }
 

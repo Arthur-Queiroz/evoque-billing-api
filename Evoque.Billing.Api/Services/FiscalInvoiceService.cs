@@ -168,6 +168,7 @@ public sealed class FiscalInvoiceService(
     public async Task<FiscalInvoiceResponse> ReissueAsync(
         Guid fiscalInvoiceId,
         ReissueFiscalInvoiceRequest request,
+        string operatorId,
         CancellationToken cancellationToken)
     {
         if (!string.Equals(
@@ -211,7 +212,7 @@ public sealed class FiscalInvoiceService(
             refusedInvoice.AsaasPaymentId,
             existingInvoices.Count + 1,
             refusedInvoice.AsaasEnvironment,
-            request.OperatorId,
+            operatorId,
             cancellationToken);
         return FiscalInvoiceResponse.FromDomain(reissuedInvoice);
     }

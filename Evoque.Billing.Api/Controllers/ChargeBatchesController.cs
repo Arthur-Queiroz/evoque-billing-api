@@ -1,3 +1,4 @@
+using Evoque.Billing.Api.Authentication;
 using Evoque.Billing.Api.Contracts;
 using Evoque.Billing.Api.Domain;
 using Evoque.Billing.Api.Services;
@@ -17,7 +18,10 @@ public sealed class ChargeBatchesController(
         CreateChargeBatchPreviewRequest request,
         CancellationToken cancellationToken)
     {
-        var chargeBatch = await chargeBatchService.CreatePreviewAsync(request, cancellationToken);
+        var chargeBatch = await chargeBatchService.CreatePreviewAsync(
+            request,
+            User.GetOperatorId(),
+            cancellationToken);
         return Created($"/api/charge-batches/{chargeBatch.Id}", chargeBatch);
     }
 
@@ -32,6 +36,7 @@ public sealed class ChargeBatchesController(
         var chargeBatch = await scheduledChargeBatchService.CreatePreviewAsync(
             new BillingPeriodReference(year, month),
             request,
+            User.GetOperatorId(),
             cancellationToken);
         return Created($"/api/charge-batches/{chargeBatch.Id}", chargeBatch);
     }
@@ -42,7 +47,7 @@ public sealed class ChargeBatchesController(
         CreateChargeBatchRequest request,
         CancellationToken cancellationToken)
     {
-        var chargeBatch = await chargeBatchService.CreateAsync(request, cancellationToken);
+        var chargeBatch = await chargeBatchService.CreateAsync(request, User.GetOperatorId(), cancellationToken);
         return Ok(chargeBatch);
     }
 
@@ -50,10 +55,12 @@ public sealed class ChargeBatchesController(
     [ProducesResponseType<ChargeBatchResponse>(StatusCodes.Status200OK)]
     public async Task<ActionResult<ChargeBatchResponse>> ApproveAsync(
         Guid chargeBatchId,
-        ApproveChargeBatchRequest request,
         CancellationToken cancellationToken)
     {
-        var chargeBatch = await chargeBatchService.ApproveAsync(chargeBatchId, request, cancellationToken);
+        var chargeBatch = await chargeBatchService.ApproveAsync(
+            chargeBatchId,
+            User.GetOperatorId(),
+            cancellationToken);
         return Ok(chargeBatch);
     }
 
@@ -64,7 +71,11 @@ public sealed class ChargeBatchesController(
         ExecuteChargeBatchRequest request,
         CancellationToken cancellationToken)
     {
-        var chargeBatch = await chargeBatchService.ExecuteAsync(chargeBatchId, request, cancellationToken);
+        var chargeBatch = await chargeBatchService.ExecuteAsync(
+            chargeBatchId,
+            request,
+            User.GetOperatorId(),
+            cancellationToken);
         return Ok(chargeBatch);
     }
 
@@ -78,6 +89,7 @@ public sealed class ChargeBatchesController(
         var chargeBatch = await chargeBatchService.RetryFailedAsync(
             chargeBatchId,
             request,
+            User.GetOperatorId(),
             cancellationToken);
         return Ok(chargeBatch);
     }

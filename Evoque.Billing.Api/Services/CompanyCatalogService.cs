@@ -48,6 +48,7 @@ public sealed class CompanyCatalogService(
 
     public async Task<CompanyResponse> CreateAsync(
         CreateCompanyRequest request,
+        string operatorId,
         CancellationToken cancellationToken)
     {
         var normalizedTaxId = CompanyTaxId.Normalize(request.TaxId);
@@ -67,10 +68,10 @@ public sealed class CompanyCatalogService(
             string.IsNullOrWhiteSpace(requestedDisplayName)
                 ? fallbackDisplayName
                 : requestedDisplayName,
-            request.OperatorId,
+            operatorId,
             createdAt);
         await companyRepository.UpsertAsync(company, cancellationToken);
-        await ApplyClosingDayAsync(company, request.ClosingDay, request.OperatorId, cancellationToken);
+        await ApplyClosingDayAsync(company, request.ClosingDay, operatorId, cancellationToken);
 
         // O CNPJ é suficiente para o cadastro. Quando o operador não informa
         // um nome, o cadastro público fornece o nome fantasia ou a razão social.
@@ -82,14 +83,14 @@ public sealed class CompanyCatalogService(
             var registryDisplayName = company.TradeName ?? company.LegalName;
             if (!string.IsNullOrWhiteSpace(registryDisplayName))
             {
-                company.UpdateManualData(registryDisplayName, request.OperatorId, DateTimeOffset.UtcNow);
+                company.UpdateManualData(registryDisplayName, operatorId, DateTimeOffset.UtcNow);
                 await companyRepository.UpsertAsync(company, cancellationToken);
             }
         }
 
         await RegisterAuditAsync(
             "company.created",
-            request.OperatorId,
+            operatorId,
             createdAt,
             $"Empresa {company.DisplayName} ({CompanyTaxId.Format(company.TaxId)}) cadastrada manualmente.",
             cancellationToken);
@@ -99,6 +100,7 @@ public sealed class CompanyCatalogService(
     public async Task<CompanyResponse> UpdateAsync(
         string taxId,
         UpdateCompanyRequest request,
+        string operatorId,
         CancellationToken cancellationToken)
     {
         var company = await RequireCompanyAsync(taxId, cancellationToken);
@@ -106,13 +108,13 @@ public sealed class CompanyCatalogService(
         var updatedAt = DateTimeOffset.UtcNow;
         company.UpdateManualData(
             request.DisplayName,
-            request.OperatorId,
+            operatorId,
             updatedAt);
         await companyRepository.UpsertAsync(company, cancellationToken);
-        await ApplyClosingDayAsync(company, request.ClosingDay, request.OperatorId, cancellationToken);
+        await ApplyClosingDayAsync(company, request.ClosingDay, operatorId, cancellationToken);
         await RegisterAuditAsync(
             "company.updated",
-            request.OperatorId,
+            operatorId,
             updatedAt,
             $"Empresa {CompanyTaxId.Format(company.TaxId)} atualizada.",
             cancellationToken);
@@ -121,20 +123,20 @@ public sealed class CompanyCatalogService(
 
     public async Task<CompanyResponse> DeactivateAsync(
         string taxId,
-        CompanyOperatorRequest request,
+        string operatorId,
         CancellationToken cancellationToken)
     {
         var company = await RequireCompanyAsync(taxId, cancellationToken);
         var deactivatedAt = DateTimeOffset.UtcNow;
-        company.Deactivate(request.OperatorId, deactivatedAt);
+        company.Deactivate(operatorId, deactivatedAt);
         await companyRepository.UpsertAsync(company, cancellationToken);
 
         // A agenda é desligada junto, para que nenhum lote antigo continue
         // selecionando uma empresa que saiu do corporativo.
-        await DeactivateScheduleAsync(company, request.OperatorId, cancellationToken);
+        await DeactivateScheduleAsync(company, operatorId, cancellationToken);
         await RegisterAuditAsync(
             "company.deactivated",
-            request.OperatorId,
+            operatorId,
             deactivatedAt,
             $"Empresa {CompanyTaxId.Format(company.TaxId)} inativada.",
             cancellationToken);
@@ -143,16 +145,16 @@ public sealed class CompanyCatalogService(
 
     public async Task<CompanyResponse> ReactivateAsync(
         string taxId,
-        CompanyOperatorRequest request,
+        string operatorId,
         CancellationToken cancellationToken)
     {
         var company = await RequireCompanyAsync(taxId, cancellationToken);
         var reactivatedAt = DateTimeOffset.UtcNow;
-        company.Reactivate(request.OperatorId, reactivatedAt);
+        company.Reactivate(operatorId, reactivatedAt);
         await companyRepository.UpsertAsync(company, cancellationToken);
         await RegisterAuditAsync(
             "company.reactivated",
-            request.OperatorId,
+            operatorId,
             reactivatedAt,
             $"Empresa {CompanyTaxId.Format(company.TaxId)} reativada.",
             cancellationToken);
@@ -162,15 +164,16 @@ public sealed class CompanyCatalogService(
     public async Task<CompanyResponse> SetIssRetentionAsync(
         string taxId,
         SetCompanyIssRetentionRequest request,
+        string operatorId,
         CancellationToken cancellationToken)
     {
         var company = await RequireCompanyAsync(taxId, cancellationToken);
         var updatedAt = DateTimeOffset.UtcNow;
-        company.SetIssRetention(request.RetainsIss, request.OperatorId, updatedAt);
+        company.SetIssRetention(request.RetainsIss, operatorId, updatedAt);
         await companyRepository.UpsertAsync(company, cancellationToken);
         await RegisterAuditAsync(
             "company.iss-retention-changed",
-            request.OperatorId,
+            operatorId,
             updatedAt,
             $"Empresa {CompanyTaxId.Format(company.TaxId)} passou a emitir nota "
             + (request.RetainsIss ? "com ISS retido pelo tomador." : "sem retenção de ISS."),
@@ -180,14 +183,14 @@ public sealed class CompanyCatalogService(
 
     public async Task<CompanyResponse> RefreshRegistryAsync(
         string taxId,
-        CompanyOperatorRequest request,
+        string operatorId,
         CancellationToken cancellationToken)
     {
         var company = await RequireCompanyAsync(taxId, cancellationToken);
         var lookupStatus = await companyRegistryEnrichmentService.RefreshAsync(company, cancellationToken);
         await RegisterAuditAsync(
             "company.registry-refreshed",
-            request.OperatorId,
+            operatorId,
             DateTimeOffset.UtcNow,
             $"Consulta cadastral da empresa {CompanyTaxId.Format(company.TaxId)} retornou {lookupStatus}.",
             cancellationToken);

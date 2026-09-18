@@ -18,7 +18,8 @@ public sealed class CompanyAsaasSynchronizationServiceTests
 
         var response = await scenario.Service.SynchronizeSandboxAsync(
             CompanyTaxId,
-            new SynchronizeCompanyAsaasSandboxRequest("teste@evoque.com.br", OperatorId),
+            new SynchronizeCompanyAsaasSandboxRequest("teste@evoque.com.br"),
+            OperatorId,
             CancellationToken.None);
 
         Assert.True(response.CreatedNow);
@@ -44,7 +45,8 @@ public sealed class CompanyAsaasSynchronizationServiceTests
 
         var response = await scenario.Service.SynchronizeSandboxAsync(
             CompanyTaxId,
-            new SynchronizeCompanyAsaasSandboxRequest("teste@evoque.com.br", OperatorId),
+            new SynchronizeCompanyAsaasSandboxRequest("teste@evoque.com.br"),
+            OperatorId,
             CancellationToken.None);
 
         Assert.False(response.CreatedNow);
@@ -68,7 +70,7 @@ public sealed class CompanyAsaasSynchronizationServiceTests
 
         var response = await scenario.Service.SynchronizeProductionAsync(
             CompanyTaxId,
-            new CompanyOperatorRequest(OperatorId),
+            OperatorId,
             CancellationToken.None);
 
         Assert.Equal("Linked", response.Status);
@@ -93,7 +95,7 @@ public sealed class CompanyAsaasSynchronizationServiceTests
 
         var response = await scenario.Service.SynchronizeProductionAsync(
             CompanyTaxId,
-            new CompanyOperatorRequest(OperatorId),
+            OperatorId,
             CancellationToken.None);
 
         Assert.Equal(expectedStatus, response.Status);
@@ -127,7 +129,8 @@ public sealed class CompanyAsaasSynchronizationServiceTests
 
         await scenario.Service.SynchronizeSandboxAsync(
             CompanyTaxId,
-            new SynchronizeCompanyAsaasSandboxRequest("teste@evoque.com.br", OperatorId),
+            new SynchronizeCompanyAsaasSandboxRequest("teste@evoque.com.br"),
+            OperatorId,
             CancellationToken.None);
 
         Assert.Equal(1, scenario.Gateway.CreateSandboxCallCount);
@@ -151,7 +154,8 @@ public sealed class CompanyAsaasSynchronizationServiceTests
 
         var resultado = await scenario.Service.SynchronizeSandboxAsync(
             CompanyTaxId,
-            new SynchronizeCompanyAsaasSandboxRequest("teste@evoque.com.br", OperatorId),
+            new SynchronizeCompanyAsaasSandboxRequest("teste@evoque.com.br"),
+            OperatorId,
             CancellationToken.None);
 
         Assert.Equal(1, scenario.Gateway.CreateSandboxCallCount);

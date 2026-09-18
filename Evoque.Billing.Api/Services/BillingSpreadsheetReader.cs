@@ -160,8 +160,8 @@ public sealed partial class BillingSpreadsheetReader(SpreadsheetWorkbookReader s
     {
         return string.Join(
             "|",
-            SpreadsheetText.Normalize(row.MemberName),
-            SpreadsheetText.Normalize(row.ContractName),
+            TextNormalization.Normalize(row.MemberName),
+            TextNormalization.Normalize(row.ContractName),
             row.CompanyTaxId,
             row.Amount.ToString("0.00", CultureInfo.InvariantCulture));
     }
@@ -186,7 +186,7 @@ public sealed record BillingSpreadsheetColumns(
 
         foreach (var cellValue in headerRow.CellValuesByColumn)
         {
-            var normalizedHeader = SpreadsheetText.Normalize(cellValue.Value);
+            var normalizedHeader = TextNormalization.Normalize(cellValue.Value);
             if (normalizedHeader == "nome")
             {
                 memberNameColumn = cellValue.Key;

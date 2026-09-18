@@ -292,7 +292,7 @@ public sealed partial class CompanyCatalogSpreadsheetReader(SpreadsheetWorkbookR
                     return $"id:{evoContractId.Trim()}";
                 }
 
-                var normalizedContractName = SpreadsheetText.Normalize(contractName ?? string.Empty);
+                var normalizedContractName = TextNormalization.Normalize(contractName ?? string.Empty);
                 return $"name:{normalizedContractName}";
             }
         }
@@ -321,7 +321,7 @@ public sealed record CompanyCatalogColumns(
 
         foreach (var cellValue in headerRow.CellValuesByColumn)
         {
-            var normalizedHeader = SpreadsheetText.Normalize(cellValue.Value);
+            var normalizedHeader = TextNormalization.Normalize(cellValue.Value);
             if (normalizedHeader is "empresa" or "profissao")
             {
                 companyColumn = cellValue.Key;

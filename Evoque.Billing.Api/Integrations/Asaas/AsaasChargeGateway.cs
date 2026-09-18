@@ -45,5 +45,45 @@ public sealed class AsaasChargeGateway(
         return new AsaasChargeCreation(responseData.Id, responseData.BankSlipUrl);
     }
 
+    public async Task<AsaasChargeState> GetChargeAsync(
+        AsaasEnvironment asaasEnvironment,
+        string asaasPaymentId,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(asaasPaymentId))
+        {
+            throw new ValidationException("O identificador da cobrança Asaas é obrigatório para consultá-la.");
+        }
+
+        var connectionOptions = asaasOptions.Value.GetConnection(asaasEnvironment);
+        AsaasOperationPolicy.ValidateReadOperation(hostEnvironment, asaasEnvironment, connectionOptions);
+        AsaasOperationPolicy.ConfigureHttpClient(httpClient, connectionOptions);
+
+        using var response = await httpClient.GetAsync(
+            $"payments/{Uri.EscapeDataString(asaasPaymentId)}",
+            cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            var failureReason = await AsaasErrorMessage.ReadAsync(response, cancellationToken);
+            throw new ExternalOperationNotAllowedException(
+                $"Não foi possível consultar a cobrança no Asaas: {failureReason}");
+        }
+
+        var responseData = await response.Content.ReadFromJsonAsync<AsaasPaymentStateResponse>(
+            cancellationToken: cancellationToken);
+        if (string.IsNullOrWhiteSpace(responseData?.Id) || string.IsNullOrWhiteSpace(responseData.Status))
+        {
+            throw new ExternalOperationNotAllowedException(
+                "O Asaas retornou uma resposta inválida ao consultar a cobrança.");
+        }
+
+        return new AsaasChargeState(
+            responseData.Id,
+            responseData.Status,
+            DateOnly.TryParse(responseData.PaymentDate, out var paymentDate) ? paymentDate : null);
+    }
+
     private sealed record AsaasPaymentResponse(string? Id, string? BankSlipUrl);
+
+    private sealed record AsaasPaymentStateResponse(string? Id, string? Status, string? PaymentDate);
 }

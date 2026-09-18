@@ -438,7 +438,10 @@ public sealed record ChargeHistoryEntryResponse(
             entry.AsaasEnvironment.ToString(),
             entry.CompanyName,
             entry.CompanyTaxId,
-            CompanyTaxId.Format(entry.CompanyTaxId),
+            // Qualificado porque a propriedade `CompanyTaxId` deste record
+            // esconde a classe estática de mesmo nome, e a chamada sem
+            // qualificação não compila (CS0120).
+            Domain.CompanyTaxId.Format(entry.CompanyTaxId),
             entry.TotalAmount,
             entry.MemberCount,
             entry.DueDate.ToString("yyyy-MM-dd"),
@@ -536,20 +539,46 @@ public sealed class InMemoryChargeHistoryRepository(InMemoryBillingDataStore dat
 
         if (!string.IsNullOrWhiteSpace(filter.CompanySearch))
         {
-            var termo = SpreadsheetText.Normalize(filter.CompanySearch);
-            var apenasDigitos = new string(filter.CompanySearch.Where(char.IsAsciiDigit).ToArray());
-            entries = entries.Where(entry =>
-                SpreadsheetText.Normalize(entry.CompanyName).Contains(termo, StringComparison.Ordinal)
-                || (apenasDigitos.Length > 0 && entry.CompanyTaxId.Contains(apenasDigitos, StringComparison.Ordinal)));
+            // Buscar por nome e por CNPJ ao mesmo tempo, com OR, transforma
+            // "Farmava 2" também numa busca por "2" dentro do CNPJ — e "2"
+            // aparece em quase todo CNPJ de 14 dígitos. A forma do que foi
+            // digitado decide qual das duas buscas vale.
+            if (LooksLikeTaxId(filter.CompanySearch))
+            {
+                var digitsOnly = new string(filter.CompanySearch.Where(char.IsAsciiDigit).ToArray());
+                entries = entries.Where(entry =>
+                    entry.CompanyTaxId.Contains(digitsOnly, StringComparison.Ordinal));
+            }
+            else
+            {
+                var searchTerm = TextNormalization.Normalize(filter.CompanySearch);
+                entries = entries.Where(entry =>
+                    TextNormalization.Normalize(entry.CompanyName)
+                        .Contains(searchTerm, StringComparison.Ordinal));
+            }
         }
 
         return entries;
     }
+
+    /// <summary>
+    /// Um termo só é busca por CNPJ quando não tem letra nenhuma: dígitos e a
+    /// pontuação usual bastam. Assim "02.346.076/0001-07" e "02346076" procuram
+    /// CNPJ, e "Farmava 2" procura nome.
+    /// </summary>
+    private static bool LooksLikeTaxId(string companySearch)
+    {
+        return companySearch.Any(char.IsAsciiDigit)
+            && companySearch.All(character =>
+                char.IsAsciiDigit(character) || character is '.' or '/' or '-' or ' ');
+    }
 }
 ```
 
-`SpreadsheetText.Normalize` já existe em `Services/SpreadsheetWorkbookReader.cs`
-e remove acento e caixa — é o que o catálogo usa para comparar nomes.
+`TextNormalization.Normalize` vive em `Domain/TextNormalization.cs` e remove
+acento e caixa — é o que o catálogo usa para comparar nomes, e o que faz esta
+busca casar com a collation `utf8mb4_0900_ai_ci` do MySQL. Não escreva um
+segundo normalizador.
 
 - [ ] **Step 5: Criar o serviço**
 
@@ -719,9 +748,15 @@ public sealed class MySqlChargeHistoryRepository(MySqlConnectionFactory connecti
             conditions.Add("bp.reference_year = @referenceYear AND bp.reference_month = @referenceMonth");
         }
 
+        // Nome e CNPJ são buscas mutuamente exclusivas, decididas pela forma do
+        // que foi digitado. Um OR entre as duas faz "Farmava 2" virar também uma
+        // busca por "2" dentro do CNPJ, que casa com quase toda empresa.
+        var searchesByTaxId = LooksLikeTaxId(filter.CompanySearch);
         if (!string.IsNullOrWhiteSpace(filter.CompanySearch))
         {
-            conditions.Add("(bd.company_name LIKE @companySearch OR bd.company_tax_id LIKE @companyTaxIdSearch)");
+            conditions.Add(searchesByTaxId
+                ? "bd.company_tax_id LIKE @companyTaxIdSearch"
+                : "bd.company_name LIKE @companySearch");
         }
 
         if (conditions.Count > 0)
@@ -748,11 +783,15 @@ public sealed class MySqlChargeHistoryRepository(MySqlConnectionFactory connecti
 
         if (!string.IsNullOrWhiteSpace(filter.CompanySearch))
         {
-            var apenasDigitos = new string(filter.CompanySearch.Where(char.IsAsciiDigit).ToArray());
-            command.Parameters.AddWithValue("@companySearch", $"%{filter.CompanySearch.Trim()}%");
-            command.Parameters.AddWithValue(
-                "@companyTaxIdSearch",
-                apenasDigitos.Length > 0 ? $"%{apenasDigitos}%" : "\u0000");
+            if (searchesByTaxId)
+            {
+                var digitsOnly = new string(filter.CompanySearch.Where(char.IsAsciiDigit).ToArray());
+                command.Parameters.AddWithValue("@companyTaxIdSearch", $"%{digitsOnly}%");
+            }
+            else
+            {
+                command.Parameters.AddWithValue("@companySearch", $"%{filter.CompanySearch.Trim()}%");
+            }
         }
 
         var entries = new List<ChargeHistoryEntry>();
@@ -796,9 +835,13 @@ public sealed class MySqlChargeHistoryRepository(MySqlConnectionFactory connecti
 }
 ```
 
-O `\u0000` no parâmetro de CNPJ é deliberado: quando a busca não tem dígito
-nenhum, esse valor garante que a comparação por CNPJ nunca casa, deixando só a
-busca por nome valer.
+**Não duplique `LooksLikeTaxId`.** A Task 2 já decidiu a regra de "isto é busca
+por CNPJ ou por nome" na implementação em memória. As duas precisam concordar:
+um usuário que digita a mesma coisa não pode ver resultados diferentes conforme
+o repositório que responde. Leia o que a Task 2 deixou e reaproveite. Se ela
+deixou o helper privado dentro de um repositório, promova-o a um lugar que as
+duas enxerguem, de preferência o próprio `ChargeHistoryFilter`, que é de quem a
+pergunta é.
 
 - [ ] **Step 2: Criar o controller**
 
@@ -1391,10 +1434,16 @@ E o método, depois de `MarkFailed`:
 - [ ] **Step 5: Corrigir o chamador de `Restore`**
 
 `MySqlChargeBatchRepository.ListItemsAsync` chama `ChargeBatchItem.Restore` e
-vai quebrar a compilação. A Task 6 é dona desse arquivo; para ver os testes
-desta task passarem, acrescente temporariamente
-`ChargePaymentStatus.Unknown, null` na posição correta e **reverta com
-`git checkout --` antes de commitar**.
+para de compilar com os parâmetros novos. Passe `ChargePaymentStatus.Unknown,
+null` ali, **e deixe assim no commit**.
+
+Não é gambiarra: até a Task 6 criar as colunas, `Unknown` é exatamente o que o
+banco sabe sobre essas cobranças — ninguém consultou nenhuma. Um comentário de
+uma linha aponta que a Task 6 passa a ler as colunas de verdade.
+
+A alternativa que este plano trazia antes — mexer e reverter antes de commitar —
+produziria um commit que não compila. Isso quebra `git bisect` e qualquer CI que
+rode naquele ponto, para economizar uma linha que de todo jeito precisa existir.
 
 - [ ] **Step 6: Rodar e confirmar que passa**
 
@@ -1656,6 +1705,7 @@ const chargePaymentLabels: Record<string, string> = {
   Received: "Pago",
   Confirmed: "Pago",
   Overdue: "Vencido",
+  RefundRequested: "Estorno solicitado",
   Refunded: "Estornado",
 };
 
@@ -2353,6 +2403,30 @@ com 17 cobranças um seletor de competência não ajuda ninguém a achar nada.
 Fica registrado como lacuna consciente, não como esquecimento: quando o
 histórico crescer, o controle é acrescentar um seletor que já tem backend
 pronto.
+
+### Comportamentos que duas implementações garantem sozinhas
+
+A regra de "isto é busca por CNPJ ou por nome" mora num lugar só,
+`ChargeHistoryFilter`, depois de ter divergido uma vez e ter sido corrigida. As
+outras não:
+
+| Comportamento | Garantido por |
+|---|---|
+| Busca por CNPJ ou por nome | `ChargeHistoryFilter`, um lugar só |
+| Dígitos extraídos do termo | `ChargeHistoryFilter`, um lugar só |
+| Nota de maior sequência | duas implementações independentes |
+| Ordem cronológica decrescente | duas implementações independentes |
+| Total da prévia | duas implementações independentes |
+
+As três últimas concordam hoje porque alguém leu as duas lado a lado, não porque
+algo as obrigue. Não existe fixture MySQL neste repositório — nenhum repositório
+tem — então o CI exercita só a versão em memória, que é justamente a que não roda
+em produção.
+
+É risco aceito, não descuido: montar fixture de banco foge ao escopo desta
+feature e mudaria o padrão de teste de todo o projeto. Fica registrado porque a
+busca por CNPJ já divergiu exatamente assim, e foi encontrada por leitura, não
+por teste.
 
 A **paginação** citada na spec também não entra. Ela é necessária na casa dos
 milhares de registros; hoje são 17, e paginar agora seria código sem exercício.

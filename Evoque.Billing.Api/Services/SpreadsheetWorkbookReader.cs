@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.IO.Compression;
-using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.Linq;
@@ -224,23 +223,5 @@ public sealed record SpreadsheetRow(
         return columnName is not null && CellValuesByColumn.TryGetValue(columnName, out var value)
             ? value
             : string.Empty;
-    }
-}
-
-/// <summary>
-/// Comparação de textos vindos da planilha sem acento e sem diferenciar
-/// maiúsculas, usada tanto para reconhecer cabeçalhos quanto para deduplicar.
-/// </summary>
-public static class SpreadsheetText
-{
-    public static string Normalize(string value)
-    {
-        var normalizedValue = value.Trim().Normalize(NormalizationForm.FormD);
-        var characters = normalizedValue
-            .Where(character => CharUnicodeInfo.GetUnicodeCategory(character)
-                != UnicodeCategory.NonSpacingMark)
-            .Select(char.ToLowerInvariant)
-            .ToArray();
-        return new string(characters).Normalize(NormalizationForm.FormC);
     }
 }

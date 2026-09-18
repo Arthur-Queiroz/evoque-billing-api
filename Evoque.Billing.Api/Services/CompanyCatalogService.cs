@@ -311,7 +311,7 @@ public sealed class CompanyCatalogService(
             return true;
         }
 
-        var normalizedSearch = SpreadsheetText.Normalize(search);
+        var normalizedSearch = TextNormalization.Normalize(search);
         var searchedDigits = new string(search.Where(char.IsAsciiDigit).ToArray());
         if (searchedDigits.Length > 0 && company.TaxId.Contains(searchedDigits, StringComparison.Ordinal))
         {
@@ -327,7 +327,7 @@ public sealed class CompanyCatalogService(
         };
         return searchableNames.Any(name =>
             !string.IsNullOrWhiteSpace(name)
-            && SpreadsheetText.Normalize(name).Contains(normalizedSearch, StringComparison.Ordinal));
+            && TextNormalization.Normalize(name).Contains(normalizedSearch, StringComparison.Ordinal));
     }
 
     private static bool MatchesAsaasLink(CompanyResponse company, string? asaasLink)

@@ -108,9 +108,19 @@ não muda mais — e é acionada por botão.
 ## Erros
 
 Falha ao consultar uma cobrança não interrompe as demais nem derruba a tela: a
-linha mantém a última situação conhecida. É a mesma regra que já vale para nota
-fiscal, e pela mesma razão — uma indisponibilidade externa não pode apagar o que
-já sabemos.
+linha mantém a última situação conhecida. Uma indisponibilidade externa não pode
+apagar o que já sabemos.
+
+**Correção de 17/09/2026:** esta seção dizia que era "a mesma regra que já vale
+para nota fiscal". Não era. `FiscalInvoiceService.SynchronizeAsync` não tem
+`try/catch` por item — uma falha numa nota aborta a chamada inteira e as notas
+seguintes ficam sem verificação. Nada já sabido é perdido, porque nada é
+sobrescrito antes da exceção, mas as demais não são consultadas.
+
+`ChargePaymentSynchronizationService` tem o `try/catch` por item e registra a
+falha na auditoria. A diferença ficou registrada em `PENDENCIAS.md` como
+trabalho a fazer na sincronização de notas, em vez de afirmar uma paridade que
+não existe.
 
 ## Testes
 

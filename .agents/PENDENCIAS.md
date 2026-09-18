@@ -67,7 +67,24 @@ preservando o registro de que ela existiu e quem cancelou. Uma prévia com
 
 ### 2.1 Auditoria e rastreamento de faturamentos passados
 
-**Levantado na reunião de 15/09/2026.**
+**Levantado na reunião de 15/09/2026. Parcialmente atendido em 17/09/2026.**
+
+A tela `Histórico` cobre a parte que o operador pedia: ela lista o que este
+sistema emitiu, atravessando competências, com busca por empresa ou CNPJ, filtro
+de ambiente e de situação do boleto, links do boleto e da nota, e um botão que
+pergunta ao Asaas o que foi pago. É a "linha do tempo do que foi cobrado e pago"
+que faltava.
+
+**O que ela não resolve, e por isso este item continua aberto:**
+
+- ela mostra cobranças, não o log de auditoria. Continua impossível perguntar o
+  que determinado operador fez, ou o que aconteceu numa competência;
+- ela mostra apenas o que saiu daqui. As cobranças criadas no painel do Asaas —
+  hoje a maioria — não têm competência nem prévia deste lado e ficam de fora;
+- o item **2.5** segue valendo: com o operador fixo em `"operador-web"`,
+  qualquer trilha de auditoria responde "operador-web" em toda linha.
+
+O restante desta seção continua válido.
 
 O dado existe e está sendo gravado. O que não existe é como lê-lo.
 
@@ -272,6 +289,26 @@ importador precisa saber qual aba pertence à competência sendo faturada.
 ---
 
 ## 4. Dívida técnica
+
+### 4.0 Uma falha numa nota interrompe a sincronização das demais
+
+**Encontrado em 17/09/2026, na revisão final do histórico de emissões.**
+
+`FiscalInvoiceService.SynchronizeAsync` percorre as notas da competência e chama
+o Asaas para cada uma, sem `try/catch` por item. Uma falha na terceira nota
+aborta a chamada inteira, e da quarta em diante ninguém descobre o desfecho.
+
+Nada já conhecido é perdido — nada é sobrescrito antes da exceção — mas o
+operador clica em "Atualizar situação", vê um erro, e não tem como saber quais
+notas chegaram a ser verificadas.
+
+`ChargePaymentSynchronizationService.SynchronizeItemAsync` já resolve isso do
+lado das cobranças: envolve cada chamada externa, registra a falha na auditoria
+e segue para a próxima. É esse desenho que a sincronização de notas precisa.
+
+**Por que não foi corrigido junto:** é mudança de comportamento fora do escopo
+da feature do histórico, e merece teste próprio — um que prove que a segunda nota
+é consultada mesmo quando a primeira falha.
 
 ### 4.1 O portal inteiro em um arquivo
 

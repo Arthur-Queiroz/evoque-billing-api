@@ -705,6 +705,14 @@ public sealed class BillingWorkflowTests
                 "pay_000123",
                 "https://sandbox.asaas.com/pdf/pay_000123"));
         }
+
+        public Task<AsaasChargeState> GetChargeAsync(
+            AsaasEnvironment asaasEnvironment,
+            string asaasPaymentId,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new AsaasChargeState(asaasPaymentId, "PENDING", null));
+        }
     }
 
     private sealed class RecordingAsaasCustomerNotificationGateway(

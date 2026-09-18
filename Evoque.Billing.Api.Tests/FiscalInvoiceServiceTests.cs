@@ -754,6 +754,14 @@ public sealed class FiscalInvoiceServiceTests
                 "pay_7h844wckdkflengp",
                 "https://www.asaas.com/pdf/pay_7h844wckdkflengp"));
         }
+
+        public Task<AsaasChargeState> GetChargeAsync(
+            AsaasEnvironment asaasEnvironment,
+            string asaasPaymentId,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new AsaasChargeState(asaasPaymentId, "PENDING", null));
+        }
     }
 
     private sealed class AlwaysReadyNotificationGateway : IAsaasCustomerNotificationGateway

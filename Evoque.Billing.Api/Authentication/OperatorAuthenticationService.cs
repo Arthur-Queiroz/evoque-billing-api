@@ -31,7 +31,13 @@ public sealed class OperatorAuthenticationService(IOptions<OperatorAccountOption
         // inexistente chegar mais rápido, e isso conta a quem está tentando
         // quais nomes valem a pena atacar — a mensagem é a mesma, o tempo não
         // seria.
-        var expectedPassword = operatorAccount?.Password ?? string.Empty;
+        // O preenchimento acompanha o tamanho do que foi digitado, e não é
+        // detalhe: `FixedTimeEquals` é constante só entre entradas do mesmo
+        // tamanho — com tamanhos diferentes ele devolve `false` de saída. Contra
+        // uma senha esperada vazia, o usuário inexistente respondia de 10 a 15
+        // vezes mais rápido que uma senha errada do mesmo comprimento, que é
+        // exatamente o que este trecho existe para evitar.
+        var expectedPassword = operatorAccount?.Password ?? new string('\0', password.Length);
         var passwordMatches = FixedTimeEquals(expectedPassword, password);
 
         return operatorAccount is not null && passwordMatches ? operatorAccount.Username : null;

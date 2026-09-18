@@ -32,17 +32,54 @@ public sealed class OperatorAuthenticationServiceTests
     }
 
     /// <summary>
-    /// O usuário é comparado sem diferenciar maiúsculas porque ninguém decora a
-    /// caixa do próprio login, e errá-la não é tentativa de invasão. A senha,
-    /// essa, diferencia.
+    /// Ninguém decora a caixa do próprio login, e errá-la não é tentativa de
+    /// invasão.
     /// </summary>
     [Fact]
-    public void Authenticate_IgnoresTheCaseOfTheUsernameButNotOfThePassword()
+    public void Authenticate_IgnoresTheCaseOfTheUsername()
     {
         var service = CreateService(("geovanna", "k7Qx2mVp9RtLw4Ha"));
 
         Assert.Equal("geovanna", service.Authenticate("GEOVANNA", "k7Qx2mVp9RtLw4Ha"));
+    }
+
+    /// <summary>
+    /// A senha, ao contrário do usuário, diferencia maiúsculas. Separado do
+    /// teste acima para que uma falha diga qual das duas regras quebrou.
+    /// </summary>
+    [Fact]
+    public void Authenticate_DoesNotIgnoreTheCaseOfThePassword()
+    {
+        var service = CreateService(("geovanna", "k7Qx2mVp9RtLw4Ha"));
+
         Assert.Null(service.Authenticate("geovanna", "K7QX2MVP9RTLW4HA"));
+    }
+
+    /// <summary>
+    /// Um campo ausente no corpo JSON chega como <c>null</c>, e a Task 3 vai
+    /// expor este serviço num endpoint anônimo. Recusar sem lançar é o
+    /// comportamento certo, e nada mais o prova.
+    /// </summary>
+    [Fact]
+    public void Authenticate_RejectsNullCredentialsWithoutThrowing()
+    {
+        var service = CreateService(("geovanna", "k7Qx2mVp9RtLw4Ha"));
+
+        Assert.Null(service.Authenticate(null!, "k7Qx2mVp9RtLw4Ha"));
+        Assert.Null(service.Authenticate("geovanna", null!));
+    }
+
+    /// <summary>
+    /// A recusa usa `IsNullOrWhiteSpace`, não `IsNullOrEmpty`, de propósito.
+    /// Sem este teste, trocar um pelo outro passaria despercebido.
+    /// </summary>
+    [Fact]
+    public void Authenticate_RejectsWhitespaceOnlyCredentials()
+    {
+        var service = CreateService(("geovanna", "k7Qx2mVp9RtLw4Ha"));
+
+        Assert.Null(service.Authenticate("   ", "k7Qx2mVp9RtLw4Ha"));
+        Assert.Null(service.Authenticate("geovanna", "   "));
     }
 
     /// <summary>

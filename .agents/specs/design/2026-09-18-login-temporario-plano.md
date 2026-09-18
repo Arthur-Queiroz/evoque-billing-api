@@ -283,7 +283,7 @@ cd C:\prog\evoque\api
 dotnet test Evoque.Billing.slnx --no-restore
 ```
 
-Esperado: PASS, com os 8 casos novos somados aos 191.
+Esperado: PASS, com os 7 casos novos somados aos 191.
 
 - [ ] **Step 6: Commit**
 
@@ -487,12 +487,26 @@ public static class OperatorPrincipal
 `Evoque.Billing.Api/Contracts/SessionContracts.cs`:
 
 ```csharp
+using System.ComponentModel.DataAnnotations;
+
 namespace Evoque.Billing.Api.Contracts;
 
-public sealed record SignInRequest(string Username, string Password);
+/// <summary>
+/// O limite de tamanho não é capricho. Este endpoint é anônimo e alcançável da
+/// internet: sem ele, cada tentativa pode mandar uma senha de megabytes, e o
+/// serviço aloca um array do mesmo tamanho para comparar. Nenhuma senha real
+/// chega perto de 256 caracteres.
+/// </summary>
+public sealed record SignInRequest(
+    [property: Required, MaxLength(256)] string Username,
+    [property: Required, MaxLength(256)] string Password);
 
 public sealed record SessionResponse(string OperatorId);
 ```
+
+`[ApiController]` valida essas anotações sozinho e devolve `400` antes de o
+controller rodar. Não é o mesmo `401` das credenciais erradas, e tudo bem: um
+corpo malformado não é uma tentativa de login, é uma requisição inválida.
 
 - [ ] **Step 3: Criar o controller**
 

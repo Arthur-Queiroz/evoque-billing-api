@@ -251,14 +251,8 @@ classe existente:
     [Fact]
     public void NewCompany_HasNoAmountPerMemberYet()
     {
-        var company = new Company(
-            OpenSportsTaxId,
-            "Open Sports",
-            null,
-            CompanySource.Manual,
-            true,
-            OperatorId,
-            DateTimeOffset.UtcNow);
+        var company = Company.CreateManually(
+            OpenSportsTaxId, "Open Sports", OperatorId, DateTimeOffset.UtcNow);
 
         Assert.Null(company.AmountPerMember);
         Assert.False(company.CanBeBilled);
@@ -267,14 +261,8 @@ classe existente:
     [Fact]
     public void SetAmountPerMember_StoresTheAgreedAmount()
     {
-        var company = new Company(
-            OpenSportsTaxId,
-            "Open Sports",
-            null,
-            CompanySource.Manual,
-            true,
-            OperatorId,
-            DateTimeOffset.UtcNow);
+        var company = Company.CreateManually(
+            OpenSportsTaxId, "Open Sports", OperatorId, DateTimeOffset.UtcNow);
 
         company.SetAmountPerMember(89.90m, OperatorId, DateTimeOffset.UtcNow);
 
@@ -292,14 +280,8 @@ classe existente:
     [InlineData(-89.90)]
     public void SetAmountPerMember_RefusesSomethingThatIsNotAPrice(decimal amount)
     {
-        var company = new Company(
-            OpenSportsTaxId,
-            "Open Sports",
-            null,
-            CompanySource.Manual,
-            true,
-            OperatorId,
-            DateTimeOffset.UtcNow);
+        var company = Company.CreateManually(
+            OpenSportsTaxId, "Open Sports", OperatorId, DateTimeOffset.UtcNow);
 
         Assert.Throws<ValidationException>(
             () => company.SetAmountPerMember(amount, OperatorId, DateTimeOffset.UtcNow));
@@ -312,14 +294,8 @@ classe existente:
     [Fact]
     public void SetAmountPerMember_AcceptsNullToClearIt()
     {
-        var company = new Company(
-            OpenSportsTaxId,
-            "Open Sports",
-            null,
-            CompanySource.Manual,
-            true,
-            OperatorId,
-            DateTimeOffset.UtcNow);
+        var company = Company.CreateManually(
+            OpenSportsTaxId, "Open Sports", OperatorId, DateTimeOffset.UtcNow);
         company.SetAmountPerMember(89.90m, OperatorId, DateTimeOffset.UtcNow);
 
         company.SetAmountPerMember(null, OperatorId, DateTimeOffset.UtcNow);
@@ -334,14 +310,8 @@ classe existente:
     [Fact]
     public void CanBeBilled_IsFalseForAnInactiveCompany()
     {
-        var company = new Company(
-            OpenSportsTaxId,
-            "Open Sports",
-            null,
-            CompanySource.Manual,
-            true,
-            OperatorId,
-            DateTimeOffset.UtcNow);
+        var company = Company.CreateManually(
+            OpenSportsTaxId, "Open Sports", OperatorId, DateTimeOffset.UtcNow);
         company.SetAmountPerMember(89.90m, OperatorId, DateTimeOffset.UtcNow);
 
         company.Deactivate(OperatorId, DateTimeOffset.UtcNow);
@@ -917,8 +887,7 @@ public sealed class CorporateBillingDraftServiceTests
 
         public void AddCompany(string taxId, string name, decimal? amountPerMember, bool isActive = true)
         {
-            var company = new Company(
-                taxId, name, null, CompanySource.Manual, true, OperatorId, DateTimeOffset.UtcNow);
+            var company = Company.CreateManually(taxId, name, OperatorId, DateTimeOffset.UtcNow);
             if (amountPerMember is not null)
             {
                 company.SetAmountPerMember(amountPerMember, OperatorId, DateTimeOffset.UtcNow);

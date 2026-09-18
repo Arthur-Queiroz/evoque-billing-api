@@ -641,13 +641,32 @@ builder.Services.AddAuthorization(options =>
 });
 ```
 
-Logo depois de `var app = builder.Build();`, antes de qualquer outro middleware:
+**A validação da subida não vira uma chamada solta.** Já existe
+`Services/StartupConfigurationValidator.cs`, que recebe `IOptions<AsaasOptions>`,
+`IOptions<EvoOptions>` e `IOptions<FiscalInvoiceOptions>` e é chamado no
+`Program.cs`. Acrescente mais uma dependência a ele:
 
 ```csharp
-app.Services.GetRequiredService<IOptions<OperatorAccountOptions>>().Value.Validate();
+public sealed class StartupConfigurationValidator(
+    IHostEnvironment hostEnvironment,
+    IConfiguration configuration,
+    IOptions<AsaasOptions> asaasOptions,
+    IOptions<EvoOptions> evoOptions,
+    IOptions<FiscalInvoiceOptions> fiscalInvoiceOptions,
+    IOptions<OperatorAccountOptions> operatorAccountOptions)
 ```
 
-Isso exige `using Microsoft.Extensions.Options;` no topo.
+E, no início do `Validate()` existente:
+
+```csharp
+        // Primeiro de tudo: sem operador configurado o sistema subiria aberto, e
+        // é o único erro aqui cuja consequência é pior que não subir.
+        operatorAccountOptions.Value.Validate();
+```
+
+Isso exige `using Evoque.Billing.Api.Authentication;` no arquivo. Não acrescente
+uma segunda chamada no `Program.cs`: duas validações de configuração em lugares
+diferentes é como uma delas deixa de ser executada.
 
 No pipeline, substitua o trecho atual por:
 

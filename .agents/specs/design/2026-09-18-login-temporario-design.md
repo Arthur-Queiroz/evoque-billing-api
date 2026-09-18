@@ -68,27 +68,25 @@ Em `production.env`, junto dos segredos que já vivem lá:
 
 ```text
 AUTH__USERS__0__USERNAME=geovanna
-AUTH__USERS__0__PASSWORDHASH=100000.<salt em base64>.<hash em base64>
+AUTH__USERS__0__PASSWORD=k7Qx2mVp9RtLw4Ha
 ```
 
-Senha com hash, não em texto puro. O argumento para texto puro seria "o arquivo
-já guarda a chave de produção do Asaas, que é pior" — e é verdade, mas pessoas
-reusam senha entre sistemas, então um vazamento passaria do estrago deste
-sistema.
+**Senha em texto, sem hash.** A decisão é deliberada e o argumento é o vizinho
+de linha: o mesmo arquivo guarda `ASAAS__PRODUCTION__APIKEY`. Quem o lê não
+precisa da senha do portal — cria cobrança real direto no Asaas. Hash protegeria
+a senha de um atacante que já tem em mãos algo estritamente pior, ao custo de
+PBKDF2, um gerador de hash no binário e um passo de documentação, tudo numa
+camada que será apagada.
 
-**PBKDF2 pelo `Rfc2898DeriveBytes.Pbkdf2` da própria plataforma**, com salt por
-usuário, 100.000 iterações, SHA-256, e comparação em tempo fixo por
-`CryptographicOperations.FixedTimeEquals`. Não é inventar criptografia: é o uso
-documentado do KDF da plataforma, em vinte e poucas linhas, sem dependência
-nova. A alternativa era trazer `Microsoft.Extensions.Identity.Core` pelo
-`PasswordHasher<T>`; o projeto hoje referencia um único pacote, e o arquivo
-inteiro será apagado no dia do Azure.
+**As senhas são geradas, não escolhidas**, e isso é a contrapartida que torna a
+decisão acima segura. O único risco que o texto puro criava era o reuso: alguém
+usar aqui a senha do próprio e-mail, e um vazamento passar a machucar fora deste
+sistema. Ninguém reusa dezesseis caracteres aleatórios. Qualquer gerador serve;
+o requisito é não ser uma senha que a pessoa já use em outro lugar.
 
-Gerar o hash precisa de um caminho documentado. O binário da API aceita
-`hash-password <senha>` como argumento e imprime a linha pronta para colar no
-env, saindo antes de subir a aplicação. É pequeno o bastante para não virar um
-modo escondido, e evita o operador procurar um gerador na internet e colar a
-senha num site qualquer.
+A comparação continua em tempo fixo, por `CryptographicOperations.FixedTimeEquals`
+sobre os bytes das duas senhas. Não é sobre criptografia: é para a resposta não
+demorar diferente conforme quantos caracteres iniciais a tentativa acertou.
 
 ## A API
 
@@ -128,9 +126,11 @@ SessionController ──→ OperatorAuthenticationService ──→ Authenticati
 conferem? Não conhece HTTP, cookie nem `HttpContext`, e por isso é testável
 direto, sem subir aplicação.
 
-Uma senha errada e um usuário inexistente devolvem a mesma resposta, e o serviço
-calcula o hash mesmo quando o usuário não existe. Responder mais rápido para
-usuário inexistente conta ao atacante quais nomes valem a pena atacar.
+Uma senha errada e um usuário inexistente devolvem a mesma resposta, e a
+comparação acontece mesmo quando o usuário não existe, contra um valor
+descartável. Sair mais cedo para usuário inexistente conta ao atacante quais
+nomes valem a pena atacar — a diferença aparece no tempo de resposta mesmo com a
+mensagem sendo idêntica.
 
 ## O operador
 
@@ -190,8 +190,7 @@ Falhar na subida é ruidoso e reversível; abrir o sistema não é.
 
 - senha correta autentica; senha errada não;
 - usuário inexistente devolve o mesmo resultado que senha errada;
-- o hash gerado para a mesma senha é diferente a cada vez, pelo salt, e ainda
-  assim confere;
+- a comparação de senha não sai mais cedo para usuário inexistente;
 - ambiente sem usuário configurado impede a subida;
 - um controller sem `[AllowAnonymous]` exige autenticação — o teste que protege
   a política padrão, porque o defeito que ela evita é silencioso.
@@ -209,9 +208,11 @@ O que quebra são os 53 pontos que constroem contratos de requisição com
 Troca-se o registro do esquema no `Program.cs`. A política padrão, os
 controllers, `User.Identity` e a leitura do operador seguem idênticos.
 
-Some: a tela de login, os três endpoints de sessão, a lista de usuários no
-ambiente e o gerador de hash — exatamente as partes que só existem porque o
-Azure ainda não está lá.
+Some: a tela de login, os três endpoints de sessão e a lista de usuários no
+ambiente — exatamente as partes que só existem porque o Azure ainda não está lá.
+
+É por isso que a senha em texto não vira dívida: não há migração a fazer, não há
+base a converter. Apaga-se o bloco `AUTH__USERS__*` do ambiente e acabou.
 
 ## Fora de escopo
 

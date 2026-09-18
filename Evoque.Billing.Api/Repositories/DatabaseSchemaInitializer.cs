@@ -17,6 +17,7 @@ public sealed class DatabaseSchemaInitializer(MySqlConnectionFactory connectionF
     private const string FiscalInvoiceEnvironmentMigrationId = "011_add_fiscal_invoice_environment";
     private const string FiscalInvoiceDocumentsMigrationId = "012_add_fiscal_invoice_documents";
     private const string ChargePaymentStatusMigrationId = "013_add_charge_payment_status";
+    private const string CompanyAmountPerMemberMigrationId = "014_add_company_amount_per_member";
 
     public async Task InitializeAsync(CancellationToken cancellationToken)
     {
@@ -200,6 +201,7 @@ public sealed class DatabaseSchemaInitializer(MySqlConnectionFactory connectionF
         await AddFiscalInvoiceEnvironmentAsync(connection, cancellationToken);
         await AddFiscalInvoiceDocumentsAsync(connection, cancellationToken);
         await AddChargePaymentStatusAsync(connection, cancellationToken);
+        await AddCompanyAmountPerMemberAsync(connection, cancellationToken);
     }
 
     /// <summary>
@@ -234,6 +236,79 @@ public sealed class DatabaseSchemaInitializer(MySqlConnectionFactory connectionF
             connection,
             transaction,
             ChargePaymentStatusMigrationId,
+            cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Quanto cada empresa paga por colaborador. Os valores vêm do controle
+    /// operacional da Evoque, conferidos em 18/09/2026 contra a exportação do
+    /// EVO: 26 das 28 empresas cobráveis estavam lá, e as duas restantes foram
+    /// informadas pela operação.
+    ///
+    /// Semeia aqui, e não por endpoint depois, porque assim os valores ficam
+    /// versionados e revisáveis — e porque uma migration que roda sozinha no
+    /// deploy não depende de alguém lembrar de um passo manual.
+    /// </summary>
+    private static async Task AddCompanyAmountPerMemberAsync(
+        MySqlConnection connection,
+        CancellationToken cancellationToken)
+    {
+        if (await IsAppliedAsync(connection, CompanyAmountPerMemberMigrationId, cancellationToken))
+        {
+            return;
+        }
+
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        // A checagem existe porque a 009 já foi editada depois de aplicada neste
+        // projeto, e a subida seguinte morreu com "duplicate column".
+        if (!await ColumnExistsAsync(connection, transaction, "companies", "amount_per_member", cancellationToken))
+        {
+            await ExecuteAsync(connection, """
+                ALTER TABLE companies
+                ADD COLUMN amount_per_member DECIMAL(18, 2) NULL AFTER retains_iss;
+                """, transaction, cancellationToken);
+        }
+
+        await ExecuteAsync(connection, """
+            UPDATE companies SET amount_per_member = CASE tax_id
+                WHEN '43322169000170' THEN 109.90
+                WHEN '56087276000103' THEN 89.90
+                WHEN '45871604000141' THEN 89.90
+                WHEN '48885518000186' THEN 89.90
+                WHEN '02346076000107' THEN 89.90
+                WHEN '01919617000178' THEN 89.90
+                WHEN '03203383000193' THEN 89.90
+                WHEN '30368366000189' THEN 89.90
+                WHEN '05872500000137' THEN 89.90
+                WHEN '05872500000307' THEN 89.90
+                WHEN '58757725000109' THEN 79.90
+                WHEN '03868609000175' THEN 79.90
+                WHEN '17193367000171' THEN 79.90
+                WHEN '04902653000117' THEN 79.90
+                WHEN '57482887000119' THEN 79.90
+                WHEN '14357167000119' THEN 79.90
+                WHEN '60524566000144' THEN 79.90
+                WHEN '34426978000131' THEN 79.90
+                WHEN '64877996000109' THEN 79.90
+                WHEN '10899502000150' THEN 79.90
+                WHEN '09406784000127' THEN 79.90
+                WHEN '01330329000183' THEN 59.90
+                WHEN '58515495000171' THEN 59.90
+                WHEN '34818653000102' THEN 59.90
+                WHEN '04026384000172' THEN 59.90
+                WHEN '04967119000199' THEN 59.90
+                WHEN '00618730000150' THEN 59.90
+                WHEN '53164208000102' THEN 59.90
+                ELSE amount_per_member
+            END;
+            """, transaction, cancellationToken);
+
+        await InsertMigrationAsync(
+            connection,
+            transaction,
+            CompanyAmountPerMemberMigrationId,
             cancellationToken);
         await transaction.CommitAsync(cancellationToken);
     }

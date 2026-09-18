@@ -88,6 +88,7 @@ builder.Services.AddScoped<BillingDraftService>();
 builder.Services.AddScoped<ChargeCreationService>();
 builder.Services.AddScoped<FiscalInvoiceService>();
 builder.Services.AddScoped<ChargeHistoryService>();
+builder.Services.AddScoped<ChargePaymentSynchronizationService>();
 builder.Services.AddScoped<ChargeBatchService>();
 builder.Services.AddScoped<CompanyBillingScheduleService>();
 builder.Services.AddScoped<ScheduledChargeBatchService>();

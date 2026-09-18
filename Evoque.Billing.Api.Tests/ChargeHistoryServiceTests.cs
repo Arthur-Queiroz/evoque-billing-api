@@ -246,6 +246,37 @@ public sealed class ChargeHistoryServiceTests
     }
 
     /// <summary>
+    /// `RECEIVED` e `CONFIRMED` são a mesma coisa para quem opera, e a coluna já
+    /// mostra os dois como "Pago". Um filtro de valor único esconderia metade das
+    /// cobranças pagas — e quem procura o que foi pago não tem como desconfiar
+    /// de que metade ficou de fora.
+    /// </summary>
+    [Fact]
+    public async Task ListAsync_FilteringByPaidFindsBothReceivedAndConfirmed()
+    {
+        var scenario = await CreateScenarioAsync();
+        var chargeBatches = scenario.DataStore.ChargeBatches.Values.ToArray();
+        chargeBatches[0].Items.Single().ApplyPaymentStatus("RECEIVED", null, DateTimeOffset.UtcNow);
+        chargeBatches[1].Items.Single().ApplyPaymentStatus("CONFIRMED", null, DateTimeOffset.UtcNow);
+
+        var historico = await scenario.Service.ListAsync(
+            new ChargeHistoryQuery(PaymentStatus: "paid"),
+            CancellationToken.None);
+
+        Assert.Equal(2, historico.Count);
+    }
+
+    [Fact]
+    public async Task ListAsync_RejectsAnUnrecognizedPaymentStatusFilter()
+    {
+        var scenario = await CreateScenarioAsync();
+
+        await Assert.ThrowsAsync<ValidationException>(() => scenario.Service.ListAsync(
+            new ChargeHistoryQuery(PaymentStatus: "Pago"),
+            CancellationToken.None));
+    }
+
+    /// <summary>
     /// Monta duas cobranças emitidas: a Farmava em Sandbox, com nota, e a Open
     /// Sports em Produção, sem nota, uma competência depois.
     /// </summary>

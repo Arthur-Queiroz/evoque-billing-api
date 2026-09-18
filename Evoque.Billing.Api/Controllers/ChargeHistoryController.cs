@@ -11,7 +11,9 @@ namespace Evoque.Billing.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/charge-history")]
-public sealed class ChargeHistoryController(ChargeHistoryService chargeHistoryService) : ControllerBase
+public sealed class ChargeHistoryController(
+    ChargeHistoryService chargeHistoryService,
+    ChargePaymentSynchronizationService chargePaymentSynchronizationService) : ControllerBase
 {
     [HttpGet]
     [ProducesResponseType<IReadOnlyCollection<ChargeHistoryEntryResponse>>(StatusCodes.Status200OK)]
@@ -20,6 +22,22 @@ public sealed class ChargeHistoryController(ChargeHistoryService chargeHistorySe
         CancellationToken cancellationToken)
     {
         var historico = await chargeHistoryService.ListAsync(query, cancellationToken);
+        return Ok(historico);
+    }
+
+    /// <summary>
+    /// Pergunta ao Asaas o que houve com as cobranças ainda em aberto e devolve
+    /// o histórico já atualizado. Só lê: nenhuma cobrança é criada, alterada ou
+    /// cancelada por aqui.
+    /// </summary>
+    [HttpPost("synchronize")]
+    [ProducesResponseType<IReadOnlyCollection<ChargeHistoryEntryResponse>>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyCollection<ChargeHistoryEntryResponse>>> SynchronizeAsync(
+        SynchronizeChargeHistoryRequest request,
+        CancellationToken cancellationToken)
+    {
+        await chargePaymentSynchronizationService.SynchronizeAsync(request.OperatorId, cancellationToken);
+        var historico = await chargeHistoryService.ListAsync(new ChargeHistoryQuery(), cancellationToken);
         return Ok(historico);
     }
 }

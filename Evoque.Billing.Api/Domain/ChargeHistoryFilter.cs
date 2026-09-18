@@ -25,6 +25,14 @@ public sealed record ChargeHistoryFilter
     public BillingPeriodReference? BillingPeriodReference { get; init; }
 
     /// <summary>
+    /// Situações de pagamento aceitas. É um conjunto porque "Pago" são dois
+    /// estados do Asaas, `Received` e `Confirmed`, que a tela já mostra com o
+    /// mesmo rótulo — filtrar por um valor só esconderia metade das cobranças
+    /// pagas. O mesmo vale para estorno, pedido ou concluído.
+    /// </summary>
+    public IReadOnlyCollection<ChargePaymentStatus>? PaymentStatuses { get; init; }
+
+    /// <summary>
     /// Diz se <see cref="CompanySearch"/> deve ser tratado como busca por CNPJ
     /// em vez de nome. Nome e CNPJ são buscas mutuamente exclusivas pela forma
     /// do termo: um termo só é CNPJ se for feito inteiramente de dígitos e da

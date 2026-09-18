@@ -19,6 +19,7 @@ public sealed class ChargeHistoryService(IChargeHistoryRepository chargeHistoryR
             CompanySearch = string.IsNullOrWhiteSpace(query.Search) ? null : query.Search.Trim(),
             AsaasEnvironment = ParseAsaasEnvironment(query.Environment),
             BillingPeriodReference = ParseBillingPeriodReference(query.Year, query.Month),
+            PaymentStatuses = ParsePaymentStatuses(query.PaymentStatus),
         };
 
         var entries = await chargeHistoryRepository.ListAsync(filter, cancellationToken);
@@ -38,6 +39,26 @@ public sealed class ChargeHistoryService(IChargeHistoryRepository chargeHistoryR
         }
 
         throw new ValidationException("O ambiente do filtro deve ser Sandbox ou Production.");
+    }
+
+    /// <summary>
+    /// Traduz o que a tela oferece, não o enum cru. "Pago" cobre `Received` e
+    /// `Confirmed` porque o Asaas devolve os dois para a mesma coisa do ponto de
+    /// vista de quem opera, e a coluna já os mostra com o mesmo rótulo.
+    /// </summary>
+    private static IReadOnlyCollection<ChargePaymentStatus>? ParsePaymentStatuses(
+        string? requestedPaymentStatus)
+    {
+        return requestedPaymentStatus switch
+        {
+            null or "" => null,
+            "unknown" => [ChargePaymentStatus.Unknown],
+            "pending" => [ChargePaymentStatus.Pending],
+            "paid" => [ChargePaymentStatus.Received, ChargePaymentStatus.Confirmed],
+            "overdue" => [ChargePaymentStatus.Overdue],
+            "refunded" => [ChargePaymentStatus.RefundRequested, ChargePaymentStatus.Refunded],
+            _ => throw new ValidationException("A situação do boleto informada no filtro não existe."),
+        };
     }
 
     private static BillingPeriodReference? ParseBillingPeriodReference(int? year, int? month)

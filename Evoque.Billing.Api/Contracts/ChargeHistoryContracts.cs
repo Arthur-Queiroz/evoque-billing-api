@@ -7,7 +7,10 @@ public sealed record ChargeHistoryQuery(
     string? Search = null,
     string? Environment = null,
     int? Year = null,
-    int? Month = null);
+    int? Month = null,
+    string? PaymentStatus = null);
+
+public sealed record SynchronizeChargeHistoryRequest(string OperatorId);
 
 public sealed record ChargeHistoryEntryResponse(
     Guid ChargeBatchId,

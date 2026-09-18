@@ -80,6 +80,19 @@ public sealed class MySqlChargeHistoryRepository(MySqlConnectionFactory connecti
                 : "bd.company_name LIKE @companySearch");
         }
 
+        // Um parâmetro por valor: `IN` não aceita uma lista dentro de um
+        // parâmetro só, e concatenar os valores no texto abriria injeção.
+        var paymentStatusParameterNames = filter.PaymentStatuses is null
+            ? []
+            : filter.PaymentStatuses
+                .Select((_, index) => $"@paymentStatus{index}")
+                .ToArray();
+
+        if (paymentStatusParameterNames.Length > 0)
+        {
+            conditions.Add($"cbi.payment_status IN ({string.Join(", ", paymentStatusParameterNames)})");
+        }
+
         if (conditions.Count > 0)
         {
             commandText.Append("\nWHERE ").Append(string.Join("\n  AND ", conditions));
@@ -118,6 +131,17 @@ public sealed class MySqlChargeHistoryRepository(MySqlConnectionFactory connecti
                 // sobre o mesmo termo digitado.
                 var escapedSearchTerm = EscapeLikeWildcards(filter.CompanySearch.Trim());
                 command.Parameters.AddWithValue("@companySearch", $"%{escapedSearchTerm}%");
+            }
+        }
+
+        if (filter.PaymentStatuses is not null)
+        {
+            var paymentStatuses = filter.PaymentStatuses.ToArray();
+            for (var index = 0; index < paymentStatuses.Length; index++)
+            {
+                command.Parameters.AddWithValue(
+                    paymentStatusParameterNames[index],
+                    paymentStatuses[index].ToString());
             }
         }
 

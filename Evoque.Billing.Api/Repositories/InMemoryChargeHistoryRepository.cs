@@ -82,6 +82,11 @@ public sealed class InMemoryChargeHistoryRepository(InMemoryBillingDataStore dat
             entries = entries.Where(entry => entry.BillingPeriodReference == filter.BillingPeriodReference);
         }
 
+        if (filter.PaymentStatuses is not null)
+        {
+            entries = entries.Where(entry => filter.PaymentStatuses.Contains(entry.PaymentStatus));
+        }
+
         if (!string.IsNullOrWhiteSpace(filter.CompanySearch))
         {
             var searchTerm = filter.CompanySearch.Trim();

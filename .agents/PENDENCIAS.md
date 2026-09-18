@@ -418,6 +418,25 @@ Ligar **Always Use HTTPS** no painel da Cloudflare. O cookie de sessão é sempr
 conseguir entrar. O redirecionamento na borda evita esse sintoma sem reduzir a
 proteção do cookie.
 
+### 5.7 Plastpel e Ciasul sem dia de fechamento
+
+As duas empresas têm valor por colaborador configurado, mas continuam sem dia
+de fechamento. Por isso, as prévias podem ser geradas, mas não entram em lote
+agendado. Juntas representam 15 colaboradores e R$ 898,50 por mês.
+
+### 5.8 Colaboradores sem CNPJ no EVO
+
+Há 14 colaboradores corporativos sem CNPJ utilizável: treze com a coluna
+`Profissão` vazia e um com CNPJ truncado na NEW LIMP. Representam cerca de
+R$ 1.100,00 por mês sem empresa a faturar. A correção deve ser feita no EVO,
+não por inferência no Evoque.
+
+### 5.9 Confirmar o uso operacional do dia 18
+
+As regras e o software aceitam fechamentos nos dias `02`, `18`, `20` e `25`,
+mas o controle operacional atual só usa `02`, `20` e `25`. Confirmar se o dia
+`18` deve permanecer como ciclo disponível ou ser removido da operação.
+
 ---
 
 ## Prioridade sugerida

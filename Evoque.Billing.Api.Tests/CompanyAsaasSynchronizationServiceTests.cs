@@ -101,6 +101,64 @@ public sealed class CompanyAsaasSynchronizationServiceTests
         Assert.Null(scenario.DataStore.Companies[CompanyTaxId].AsaasProductionCustomerId);
     }
 
+    /// <summary>
+    /// O Asaas recusa a nota fiscal quando o tomador não tem endereço completo.
+    /// O catálogo já recebe esse endereço da BrasilAPI, então o espelho de teste
+    /// nasce com ele — é o que torna a simulação fiel ao que produção fará.
+    /// </summary>
+    [Fact]
+    public async Task SynchronizeSandboxAsync_SendsTheCatalogAddressWhenCreatingTheMirror()
+    {
+        var scenario = CreateScenario(AsaasCustomerLookupResult.NotFound());
+        var company = scenario.DataStore.Companies[CompanyTaxId];
+        company.ApplyRegistryData(
+            "OPEN SPORTS LTDA",
+            "Open Sports",
+            "ATIVA",
+            new CompanyRegistryAddress(
+                "Rua Silva Jardim",
+                "270",
+                "Sala 4",
+                "Centro",
+                "Santo André",
+                "SP",
+                "09190370"),
+            DateTimeOffset.UtcNow);
+
+        await scenario.Service.SynchronizeSandboxAsync(
+            CompanyTaxId,
+            new SynchronizeCompanyAsaasSandboxRequest("teste@evoque.com.br", OperatorId),
+            CancellationToken.None);
+
+        Assert.Equal(1, scenario.Gateway.CreateSandboxCallCount);
+        var endereco = scenario.Gateway.LastSandboxAddress;
+        Assert.NotNull(endereco);
+        Assert.Equal("Rua Silva Jardim", endereco.Street);
+        Assert.Equal("270", endereco.Number);
+        Assert.Equal("Centro", endereco.Neighborhood);
+        Assert.Equal("09190370", endereco.PostalCode);
+    }
+
+    /// <summary>
+    /// Uma empresa sem endereço no catálogo continua tendo o espelho criado. A
+    /// nota dela falhará com a mensagem do Asaas, que a tela exibe — é melhor
+    /// expor a lacuna do que escondê-la com um endereço inventado.
+    /// </summary>
+    [Fact]
+    public async Task SynchronizeSandboxAsync_StillCreatesTheMirrorWithoutACatalogAddress()
+    {
+        var scenario = CreateScenario(AsaasCustomerLookupResult.NotFound());
+
+        var resultado = await scenario.Service.SynchronizeSandboxAsync(
+            CompanyTaxId,
+            new SynchronizeCompanyAsaasSandboxRequest("teste@evoque.com.br", OperatorId),
+            CancellationToken.None);
+
+        Assert.Equal(1, scenario.Gateway.CreateSandboxCallCount);
+        Assert.Null(scenario.Gateway.LastSandboxAddress);
+        Assert.Equal("Linked", resultado.Status);
+    }
+
     private static TestScenario CreateScenario(AsaasCustomerLookupResult lookupResult)
     {
         var dataStore = new InMemoryBillingDataStore();
@@ -131,6 +189,8 @@ public sealed class CompanyAsaasSynchronizationServiceTests
     {
         public int CreateSandboxCallCount { get; private set; }
 
+        public CompanyRegistryAddress? LastSandboxAddress { get; private set; }
+
         public Task<AsaasCustomerPage> ListAsync(
             string? searchTerm,
             int offset,
@@ -152,9 +212,11 @@ public sealed class CompanyAsaasSynchronizationServiceTests
             string name,
             string taxId,
             string email,
+            CompanyRegistryAddress? registryAddress,
             CancellationToken cancellationToken)
         {
             CreateSandboxCallCount++;
+            LastSandboxAddress = registryAddress;
             return Task.FromResult(
                 new AsaasCustomer(
                     "cus_sandbox_created",

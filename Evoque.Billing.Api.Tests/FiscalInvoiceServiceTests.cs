@@ -276,6 +276,70 @@ public sealed class FiscalInvoiceServiceTests
         Assert.DoesNotContain(auditLogs, auditLog => auditLog.Action == "fiscal-invoice.status-synchronized");
     }
 
+    /// <summary>
+    /// Checar só o campo em memória não prova persistência: o InMemory devolve a
+    /// mesma referência que <c>AttachDocuments</c> já mutou antes de qualquer
+    /// decisão de gravar. A prova é <c>UpdateAsync</c> ter sido chamado, com o
+    /// mesmo <see cref="CountingFiscalInvoiceRepository"/> usado no teste vizinho
+    /// de status inalterado.
+    /// </summary>
+    [Fact]
+    public async Task SynchronizeAsync_StoresTheDocumentsAsaasReturned()
+    {
+        var countingFiscalInvoiceRepository = new CountingFiscalInvoiceRepository(
+            new InMemoryFiscalInvoiceRepository(new InMemoryBillingDataStore()));
+        var context = await CreateApprovedDraftAsync(fiscalInvoiceRepository: countingFiscalInvoiceRepository);
+        await ExecuteProductionBatchAsync(context);
+        context.InvoiceGateway.ReturnDocumentsOnGet("https://asaas/pdf", "https://asaas/xml");
+        var updateCallCountBeforeSync = countingFiscalInvoiceRepository.UpdateCallCount;
+
+        await context.FiscalInvoiceService.SynchronizeAsync(
+            new BillingPeriodReference(2026, 8),
+            OperatorId,
+            CancellationToken.None);
+
+        Assert.Equal(updateCallCountBeforeSync + 1, countingFiscalInvoiceRepository.UpdateCallCount);
+        var fiscalInvoice = Assert.Single(
+            await context.FiscalInvoiceRepository.ListByBillingPeriodIdAsync(
+                context.BillingPeriodId,
+                CancellationToken.None));
+        Assert.Equal("https://asaas/pdf", fiscalInvoice.PdfUrl);
+        Assert.Equal("https://asaas/xml", fiscalInvoice.XmlUrl);
+    }
+
+    /// <summary>
+    /// Regressão: o laço pulava a persistência quando o status não mudava. Se os
+    /// documentos chegassem nessa passagem, seriam descartados. A prova precisa
+    /// ser <c>UpdateAsync</c> chamado, não o campo em memória: como o InMemory
+    /// devolve a mesma referência que <c>AttachDocuments</c> já mutou, checar
+    /// <c>PdfUrl</c> sozinho passaria mesmo com o bug antigo.
+    /// </summary>
+    [Fact]
+    public async Task SynchronizeAsync_StoresDocumentsEvenWhenTheStatusDoesNotChange()
+    {
+        var countingFiscalInvoiceRepository = new CountingFiscalInvoiceRepository(
+            new InMemoryFiscalInvoiceRepository(new InMemoryBillingDataStore()));
+        var context = await CreateApprovedDraftAsync(
+            invoiceGateway: new RecordingAsaasInvoiceGateway(statusOnGet: "SCHEDULED"),
+            fiscalInvoiceRepository: countingFiscalInvoiceRepository);
+        await ExecuteProductionBatchAsync(context);
+        context.InvoiceGateway.ReturnDocumentsOnGet("https://asaas/pdf", null);
+        var updateCallCountBeforeSync = countingFiscalInvoiceRepository.UpdateCallCount;
+
+        await context.FiscalInvoiceService.SynchronizeAsync(
+            new BillingPeriodReference(2026, 8),
+            OperatorId,
+            CancellationToken.None);
+
+        Assert.Equal(updateCallCountBeforeSync + 1, countingFiscalInvoiceRepository.UpdateCallCount);
+        var fiscalInvoice = Assert.Single(
+            await context.FiscalInvoiceRepository.ListByBillingPeriodIdAsync(
+                context.BillingPeriodId,
+                CancellationToken.None));
+        Assert.Equal(FiscalInvoiceStatus.Scheduled, fiscalInvoice.Status);
+        Assert.Equal("https://asaas/pdf", fiscalInvoice.PdfUrl);
+    }
+
     [Fact]
     public async Task ReissueAsync_RequiresTheConfirmationPhrase()
     {
@@ -549,6 +613,8 @@ public sealed class FiscalInvoiceServiceTests
         private readonly List<AsaasEnvironment> scheduledEnvironments = [];
         private readonly List<string> queriedInvoiceIds = [];
         private string? currentFailureMessage = scheduleFailureMessage;
+        private string? pdfUrlOnGet;
+        private string? xmlUrlOnGet;
 
         public int ScheduleCallCount { get; private set; }
 
@@ -562,6 +628,12 @@ public sealed class FiscalInvoiceServiceTests
 
         /// <summary>Simula a empresa corrigindo o cadastro depois da recusa da prefeitura.</summary>
         public void StopFailing() => currentFailureMessage = null;
+
+        public void ReturnDocumentsOnGet(string? pdfUrl, string? xmlUrl)
+        {
+            pdfUrlOnGet = pdfUrl;
+            xmlUrlOnGet = xmlUrl;
+        }
 
         public Task<AsaasInvoiceCreation> ScheduleInvoiceAsync(
             AsaasEnvironment asaasEnvironment,
@@ -586,7 +658,7 @@ public sealed class FiscalInvoiceServiceTests
         {
             GetCallCount++;
             queriedInvoiceIds.Add(asaasInvoiceId);
-            return Task.FromResult(new AsaasInvoiceState(asaasInvoiceId, statusOnGet, null));
+            return Task.FromResult(new AsaasInvoiceState(asaasInvoiceId, statusOnGet, null, pdfUrlOnGet, xmlUrlOnGet));
         }
     }
 

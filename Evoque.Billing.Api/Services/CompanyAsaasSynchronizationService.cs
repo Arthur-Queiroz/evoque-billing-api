@@ -49,6 +49,7 @@ public sealed class CompanyAsaasSynchronizationService(
                 company.DisplayName,
                 company.TaxId,
                 email!,
+                company.RegistryAddress,
                 cancellationToken);
             createdNow = true;
         }

@@ -89,8 +89,18 @@ public sealed class AsaasInvoiceGateway(
                 "O Asaas retornou uma resposta inválida ao consultar a nota fiscal.");
         }
 
-        return new AsaasInvoiceState(responseData.Id, responseData.Status, responseData.StatusDescription);
+        return new AsaasInvoiceState(
+            responseData.Id,
+            responseData.Status,
+            responseData.StatusDescription,
+            responseData.PdfUrl,
+            responseData.XmlUrl);
     }
 
-    private sealed record AsaasInvoiceResponse(string? Id, string? Status, string? StatusDescription);
+    private sealed record AsaasInvoiceResponse(
+        string? Id,
+        string? Status,
+        string? StatusDescription,
+        string? PdfUrl,
+        string? XmlUrl);
 }

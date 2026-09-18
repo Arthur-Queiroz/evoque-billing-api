@@ -33,6 +33,8 @@ public sealed class FiscalInvoice
             retainsIss,
             serviceDescription,
             null,
+            null,
+            null,
             createdAt,
             createdAt)
     {
@@ -52,6 +54,8 @@ public sealed class FiscalInvoice
         bool retainsIss,
         string serviceDescription,
         string? errorMessage,
+        string? pdfUrl,
+        string? xmlUrl,
         DateTimeOffset createdAt,
         DateTimeOffset updatedAt)
     {
@@ -98,6 +102,8 @@ public sealed class FiscalInvoice
         RetainsIss = retainsIss;
         ServiceDescription = serviceDescription;
         ErrorMessage = errorMessage;
+        PdfUrl = pdfUrl;
+        XmlUrl = xmlUrl;
         CreatedAt = createdAt;
         UpdatedAt = updatedAt;
     }
@@ -135,6 +141,16 @@ public sealed class FiscalInvoice
     /// <summary>Motivo devolvido pelo Asaas ou pela prefeitura, na íntegra.</summary>
     public string? ErrorMessage { get; private set; }
 
+    /// <summary>
+    /// Links do PDF e do XML que o Asaas gera quando a nota é autorizada. São
+    /// públicos e estáveis, então guardamos a URL em vez de baixar o arquivo.
+    /// </summary>
+    public string? PdfUrl { get; private set; }
+
+    public string? XmlUrl { get; private set; }
+
+    public bool HasDocuments => !string.IsNullOrWhiteSpace(PdfUrl) || !string.IsNullOrWhiteSpace(XmlUrl);
+
     public DateTimeOffset CreatedAt { get; }
 
     public DateTimeOffset UpdatedAt { get; private set; }
@@ -161,6 +177,8 @@ public sealed class FiscalInvoice
         bool retainsIss,
         string serviceDescription,
         string? errorMessage,
+        string? pdfUrl,
+        string? xmlUrl,
         DateTimeOffset createdAt,
         DateTimeOffset updatedAt)
     {
@@ -178,6 +196,8 @@ public sealed class FiscalInvoice
             retainsIss,
             serviceDescription,
             errorMessage,
+            pdfUrl,
+            xmlUrl,
             createdAt,
             updatedAt);
     }
@@ -232,6 +252,37 @@ public sealed class FiscalInvoice
 
         Status = mappedStatus.Value;
         ErrorMessage = string.IsNullOrWhiteSpace(statusDescription) ? null : statusDescription.Trim();
+        UpdatedAt = updatedAt;
+    }
+
+    /// <summary>
+    /// Guarda os documentos devolvidos pelo Asaas. Separado de
+    /// <see cref="ApplyAsaasStatus"/> porque as duas coisas são independentes:
+    /// o status muda antes de existir documento, e uma consulta posterior pode
+    /// trazer o documento sem que o status mude.
+    ///
+    /// PDF e XML são preservados independentemente um do outro: cada um só é
+    /// sobrescrito se vier preenchido, e nenhum apaga o outro. Na prática o
+    /// Asaas parece devolver os dois juntos, mas isso nunca foi verificado, e
+    /// esta guarda não pode depender dessa suposição.
+    /// </summary>
+    public void AttachDocuments(string? pdfUrl, string? xmlUrl, DateTimeOffset updatedAt)
+    {
+        if (string.IsNullOrWhiteSpace(pdfUrl) && string.IsNullOrWhiteSpace(xmlUrl))
+        {
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(pdfUrl))
+        {
+            PdfUrl = pdfUrl.Trim();
+        }
+
+        if (!string.IsNullOrWhiteSpace(xmlUrl))
+        {
+            XmlUrl = xmlUrl.Trim();
+        }
+
         UpdatedAt = updatedAt;
     }
 

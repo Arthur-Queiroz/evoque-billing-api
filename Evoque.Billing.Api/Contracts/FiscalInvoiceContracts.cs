@@ -21,6 +21,8 @@ public sealed record FiscalInvoiceResponse(
     bool RetainsIss,
     string ServiceDescription,
     string? ErrorMessage,
+    string? PdfUrl,
+    string? XmlUrl,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt)
 {
@@ -40,6 +42,8 @@ public sealed record FiscalInvoiceResponse(
             fiscalInvoice.RetainsIss,
             fiscalInvoice.ServiceDescription,
             fiscalInvoice.ErrorMessage,
+            fiscalInvoice.PdfUrl,
+            fiscalInvoice.XmlUrl,
             fiscalInvoice.CreatedAt,
             fiscalInvoice.UpdatedAt);
     }

@@ -84,6 +84,7 @@ public sealed class AsaasCustomerGateway(
         string name,
         string taxId,
         string email,
+        CompanyRegistryAddress? registryAddress,
         CancellationToken cancellationToken)
     {
         var connectionOptions = asaasOptions.Value.GetConnection(AsaasEnvironment.Sandbox);
@@ -93,16 +94,31 @@ public sealed class AsaasCustomerGateway(
             connectionOptions);
         AsaasOperationPolicy.ConfigureHttpClient(httpClient, connectionOptions);
 
-        using var response = await httpClient.PostAsJsonAsync(
-            "customers",
-            new
+        // O Asaas exige endereço completo do tomador para emitir NFS-e. Enviar
+        // o do catálogo, que vem da BrasilAPI, faz o cliente de teste refletir
+        // o que a produção encontrará.
+        var requestBody = registryAddress is null
+            ? (object)new
             {
                 name,
                 cpfCnpj = taxId,
                 email,
                 notificationDisabled = false,
-            },
-            cancellationToken);
+            }
+            : new
+            {
+                name,
+                cpfCnpj = taxId,
+                email,
+                notificationDisabled = false,
+                address = registryAddress.Street,
+                addressNumber = registryAddress.Number,
+                complement = registryAddress.Complement,
+                province = registryAddress.Neighborhood,
+                postalCode = registryAddress.PostalCode,
+            };
+
+        using var response = await httpClient.PostAsJsonAsync("customers", requestBody, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
             var refusalReason = await AsaasErrorMessage.ReadAsync(response, cancellationToken);

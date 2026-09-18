@@ -15,6 +15,7 @@ public sealed class DatabaseSchemaInitializer(MySqlConnectionFactory connectionF
     private const string FiscalInvoiceMigrationId = "009_add_fiscal_invoices";
     private const string CompanyIssRetentionMigrationId = "010_add_company_iss_retention";
     private const string FiscalInvoiceEnvironmentMigrationId = "011_add_fiscal_invoice_environment";
+    private const string FiscalInvoiceDocumentsMigrationId = "012_add_fiscal_invoice_documents";
 
     public async Task InitializeAsync(CancellationToken cancellationToken)
     {
@@ -196,6 +197,7 @@ public sealed class DatabaseSchemaInitializer(MySqlConnectionFactory connectionF
         await CreateFiscalInvoiceTableAsync(connection, cancellationToken);
         await AddCompanyIssRetentionAsync(connection, cancellationToken);
         await AddFiscalInvoiceEnvironmentAsync(connection, cancellationToken);
+        await AddFiscalInvoiceDocumentsAsync(connection, cancellationToken);
     }
 
     /// <summary>
@@ -281,6 +283,38 @@ public sealed class DatabaseSchemaInitializer(MySqlConnectionFactory connectionF
             connection,
             transaction,
             FiscalInvoiceEnvironmentMigrationId,
+            cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// PDF e XML que o Asaas gera ao autorizar a nota. São links públicos e
+    /// estáveis; guardamos a URL em vez de baixar o arquivo.
+    /// </summary>
+    private static async Task AddFiscalInvoiceDocumentsAsync(
+        MySqlConnection connection,
+        CancellationToken cancellationToken)
+    {
+        if (await IsAppliedAsync(connection, FiscalInvoiceDocumentsMigrationId, cancellationToken))
+        {
+            return;
+        }
+
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        if (!await ColumnExistsAsync(connection, transaction, "fiscal_invoices", "pdf_url", cancellationToken))
+        {
+            await ExecuteAsync(connection, """
+                ALTER TABLE fiscal_invoices
+                ADD COLUMN pdf_url TEXT NULL AFTER error_message,
+                ADD COLUMN xml_url TEXT NULL AFTER pdf_url;
+                """, transaction, cancellationToken);
+        }
+
+        await InsertMigrationAsync(
+            connection,
+            transaction,
+            FiscalInvoiceDocumentsMigrationId,
             cancellationToken);
         await transaction.CommitAsync(cancellationToken);
     }

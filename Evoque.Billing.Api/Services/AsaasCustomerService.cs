@@ -85,10 +85,14 @@ public sealed class AsaasCustomerService(
                 false);
         }
 
+        // Esta criação manual não passa pelo catálogo de empresas, então não há
+        // CompanyRegistryAddress disponível aqui — só a sincronização Sandbox do
+        // catálogo (CompanyAsaasSynchronizationService) conhece o endereço.
         var createdCustomer = await asaasCustomerGateway.CreateSandboxAsync(
             name,
             taxId,
             email!,
+            registryAddress: null,
             cancellationToken);
         return new CreateSandboxAsaasCustomerResponse(
             await CreateResponseAsync(createdCustomer, cancellationToken),

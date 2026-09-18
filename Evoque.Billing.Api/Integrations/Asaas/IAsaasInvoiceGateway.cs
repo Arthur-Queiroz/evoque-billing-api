@@ -46,4 +46,9 @@ public sealed record AsaasInvoiceRequest
 
 public sealed record AsaasInvoiceCreation(string InvoiceId, string Status);
 
-public sealed record AsaasInvoiceState(string InvoiceId, string Status, string? StatusDescription);
+public sealed record AsaasInvoiceState(
+    string InvoiceId,
+    string Status,
+    string? StatusDescription,
+    string? PdfUrl,
+    string? XmlUrl);

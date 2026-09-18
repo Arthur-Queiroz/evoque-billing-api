@@ -118,17 +118,34 @@ public sealed class FiscalInvoiceService(
                 fiscalInvoice.AsaasEnvironment,
                 fiscalInvoice.AsaasInvoiceId,
                 cancellationToken);
+
             var previousStatus = fiscalInvoice.Status;
+            var hadDocuments = fiscalInvoice.HasDocuments;
+
             fiscalInvoice.ApplyAsaasStatus(
                 invoiceState.Status,
                 invoiceState.StatusDescription,
                 DateTimeOffset.UtcNow);
-            if (fiscalInvoice.Status == previousStatus)
+            fiscalInvoice.AttachDocuments(
+                invoiceState.PdfUrl,
+                invoiceState.XmlUrl,
+                DateTimeOffset.UtcNow);
+
+            // Persiste quando qualquer um dos dois mudou. Olhar só o status
+            // descartaria o documento que chega sem o status se mover.
+            var statusChanged = fiscalInvoice.Status != previousStatus;
+            var documentsArrived = fiscalInvoice.HasDocuments && !hadDocuments;
+            if (!statusChanged && !documentsArrived)
             {
                 continue;
             }
 
             await fiscalInvoiceRepository.UpdateAsync(fiscalInvoice, cancellationToken);
+            if (!statusChanged)
+            {
+                continue;
+            }
+
             await RegisterAuditAsync(
                 "fiscal-invoice.status-synchronized",
                 operatorId,

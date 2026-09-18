@@ -221,10 +221,10 @@ public sealed class BillingWorkflowTests
 
         var result = await services.ChargeBatchService.CreateAsync(
             new CreateChargeBatchRequest(
-                "maria",
                 new DateOnly(2026, 8, 10),
                 "CONFIRMAR",
                 [firstBillingDraft.Id, secondBillingDraft.Id]),
+            "maria",
             CancellationToken.None);
 
         Assert.Equal(2, result.Items.Count);
@@ -249,10 +249,10 @@ public sealed class BillingWorkflowTests
 
         var preview = await services.ChargeBatchService.CreatePreviewAsync(
             new CreateChargeBatchPreviewRequest(
-                "maria",
                 new DateOnly(2026, 8, 20),
                 "Sandbox",
                 [billingDraft.Id]),
+            "maria",
             CancellationToken.None);
 
         Assert.Equal("AwaitingApproval", preview.Status);
@@ -261,7 +261,7 @@ public sealed class BillingWorkflowTests
 
         var approvedBatch = await services.ChargeBatchService.ApproveAsync(
             preview.Id,
-            new ApproveChargeBatchRequest("maria"),
+            "maria",
             CancellationToken.None);
         Assert.Equal("Approved", approvedBatch.Status);
         Assert.Equal("maria", approvedBatch.ApprovedBy);
@@ -269,7 +269,8 @@ public sealed class BillingWorkflowTests
 
         var completedBatch = await services.ChargeBatchService.ExecuteAsync(
             preview.Id,
-            new ExecuteChargeBatchRequest("maria", "CONFIRMAR"),
+            new ExecuteChargeBatchRequest("CONFIRMAR"),
+            "maria",
             CancellationToken.None);
 
         Assert.Equal("Completed", completedBatch.Status);
@@ -282,18 +283,19 @@ public sealed class BillingWorkflowTests
 
         var productionPreview = await services.ChargeBatchService.CreatePreviewAsync(
             new CreateChargeBatchPreviewRequest(
-                "maria",
                 new DateOnly(2026, 8, 20),
                 "Production",
                 [billingDraft.Id]),
+            "maria",
             CancellationToken.None);
         await services.ChargeBatchService.ApproveAsync(
             productionPreview.Id,
-            new ApproveChargeBatchRequest("maria"),
+            "maria",
             CancellationToken.None);
         var productionBatch = await services.ChargeBatchService.ExecuteAsync(
             productionPreview.Id,
-            new ExecuteChargeBatchRequest("maria", "CONFIRMAR"),
+            new ExecuteChargeBatchRequest("CONFIRMAR"),
+            "maria",
             CancellationToken.None);
 
         Assert.Equal("Completed", productionBatch.Status);
@@ -318,10 +320,10 @@ public sealed class BillingWorkflowTests
         var exception = await Assert.ThrowsAsync<ValidationException>(() =>
             services.ChargeBatchService.CreatePreviewAsync(
                 new CreateChargeBatchPreviewRequest(
-                    "maria",
                     new DateOnly(2020, 1, 2),
                     "Sandbox",
                     [billingDraft.Id]),
+                "maria",
                 CancellationToken.None));
 
         Assert.Contains("já passou", exception.Message);
@@ -347,21 +349,21 @@ public sealed class BillingWorkflowTests
         await services.BillingDraftService.ApproveAsync(billingDraft.Id, "maria", CancellationToken.None);
 
         var firstRequest = new CreateChargeBatchPreviewRequest(
-            "maria",
             new DateOnly(2026, 9, 5),
             "Sandbox",
             [billingDraft.Id]);
         var firstChargeBatch = await services.ChargeBatchService.CreatePreviewAsync(
             firstRequest,
+            "maria",
             CancellationToken.None);
 
         var exception = await Assert.ThrowsAsync<ConflictException>(() =>
             services.ChargeBatchService.CreatePreviewAsync(
                 new CreateChargeBatchPreviewRequest(
-                    "maria",
                     new DateOnly(2026, 9, 5),
                     "Sandbox",
                     [billingDraft.Id]),
+                "maria",
                 CancellationToken.None));
 
         Assert.Contains(firstChargeBatch.Id.ToString(), exception.Message);
@@ -381,19 +383,22 @@ public sealed class BillingWorkflowTests
             CancellationToken.None);
         await services.BillingDraftService.ApproveAsync(billingDraft.Id, "maria", CancellationToken.None);
         var firstChargeBatch = await services.ChargeBatchService.CreatePreviewAsync(
-            new CreateChargeBatchPreviewRequest("maria", new DateOnly(2026, 9, 5), "Sandbox", [billingDraft.Id]),
+            new CreateChargeBatchPreviewRequest(new DateOnly(2026, 9, 5), "Sandbox", [billingDraft.Id]),
+            "maria",
             CancellationToken.None);
         await services.ChargeBatchService.ApproveAsync(
             firstChargeBatch.Id,
-            new ApproveChargeBatchRequest("maria"),
+            "maria",
             CancellationToken.None);
         await services.ChargeBatchService.ExecuteAsync(
             firstChargeBatch.Id,
-            new ExecuteChargeBatchRequest("maria", "CONFIRMAR"),
+            new ExecuteChargeBatchRequest("CONFIRMAR"),
+            "maria",
             CancellationToken.None);
 
         var secondChargeBatch = await services.ChargeBatchService.CreatePreviewAsync(
-            new CreateChargeBatchPreviewRequest("maria", new DateOnly(2026, 9, 5), "Sandbox", [billingDraft.Id]),
+            new CreateChargeBatchPreviewRequest(new DateOnly(2026, 9, 5), "Sandbox", [billingDraft.Id]),
+            "maria",
             CancellationToken.None);
 
         Assert.NotEqual(firstChargeBatch.Id, secondChargeBatch.Id);
@@ -436,11 +441,12 @@ public sealed class BillingWorkflowTests
 
         var preview = await services.ScheduledChargeBatchService.CreatePreviewAsync(
             billingPeriodReference,
-            new CreateScheduledChargeBatchPreviewRequest(
-                "maria",
-                20,
-                new DateOnly(2026, 9, 2),
-                "Sandbox"),
+                new CreateScheduledChargeBatchPreviewRequest(
+                    "maria",
+                    20,
+                    new DateOnly(2026, 9, 2),
+                    "Sandbox"),
+            "maria",
             CancellationToken.None);
 
         Assert.Equal(closingDayTwentyDraft.Id, Assert.Single(preview.Items).BillingDraftId);
@@ -462,6 +468,7 @@ public sealed class BillingWorkflowTests
                     25,
                     new DateOnly(2026, 8, 10),
                     "Sandbox"),
+                "maria",
                 CancellationToken.None));
 
         Assert.Contains("anterior ao fechamento", exception.Message);
@@ -500,11 +507,12 @@ public sealed class BillingWorkflowTests
         // que as cobranças reais aparecem no Asaas.
         var preview = await services.ScheduledChargeBatchService.CreatePreviewAsync(
             billingPeriodReference,
-            new CreateScheduledChargeBatchPreviewRequest(
-                "maria",
-                20,
-                new DateOnly(2026, 9, 5),
-                "Sandbox"),
+                new CreateScheduledChargeBatchPreviewRequest(
+                    "maria",
+                    20,
+                    new DateOnly(2026, 9, 5),
+                    "Sandbox"),
+            "maria",
             CancellationToken.None);
 
         var item = Assert.Single(preview.Items);
@@ -548,6 +556,7 @@ public sealed class BillingWorkflowTests
                     20,
                     new DateOnly(2026, 9, 5),
                     "Sandbox"),
+                "maria",
                 CancellationToken.None));
     }
 
@@ -574,10 +583,10 @@ public sealed class BillingWorkflowTests
 
         var originalBatch = await services.ChargeBatchService.CreateAsync(
             new CreateChargeBatchRequest(
-                "maria",
                 new DateOnly(2026, 8, 10),
                 "CONFIRMAR",
                 [firstBillingDraft.Id, secondBillingDraft.Id]),
+            "maria",
             CancellationToken.None);
 
         Assert.Equal("CompletedWithErrors", originalBatch.Status);
@@ -585,7 +594,8 @@ public sealed class BillingWorkflowTests
 
         var retryBatch = await services.ChargeBatchService.RetryFailedAsync(
             originalBatch.Id,
-            new RetryFailedChargeBatchRequest("maria", "CONFIRMAR"),
+            new RetryFailedChargeBatchRequest("CONFIRMAR"),
+            "maria",
             CancellationToken.None);
 
         Assert.Equal(originalBatch.Id, retryBatch.RetryOfChargeBatchId);

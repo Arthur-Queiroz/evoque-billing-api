@@ -10,8 +10,6 @@ public sealed record ChargeHistoryQuery(
     int? Month = null,
     string? PaymentStatus = null);
 
-public sealed record SynchronizeChargeHistoryRequest(string OperatorId);
-
 public sealed record ChargeHistoryEntryResponse(
     Guid ChargeBatchId,
     Guid BillingDraftId,

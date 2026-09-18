@@ -3,9 +3,7 @@ using Evoque.Billing.Api.Domain;
 namespace Evoque.Billing.Api.Contracts;
 
 /// <summary>Reemissão de uma nota recusada. Exige a frase CONFIRMAR.</summary>
-public sealed record ReissueFiscalInvoiceRequest(string OperatorId, string ConfirmationPhrase);
-
-public sealed record SynchronizeFiscalInvoicesRequest(string OperatorId);
+public sealed record ReissueFiscalInvoiceRequest(string ConfirmationPhrase);
 
 public sealed record FiscalInvoiceResponse(
     Guid Id,

@@ -1,3 +1,4 @@
+using Evoque.Billing.Api.Authentication;
 using Evoque.Billing.Api.Contracts;
 using Evoque.Billing.Api.Domain;
 using Evoque.Billing.Api.Services;
@@ -14,12 +15,11 @@ public sealed class BillingPeriodsController(BillingPeriodService billingPeriodS
     public async Task<ActionResult<BillingPeriodResponse>> CreateAsync(
         int year,
         int month,
-        CreateBillingPeriodRequest request,
         CancellationToken cancellationToken)
     {
         var billingPeriod = await billingPeriodService.CreateAsync(
             new BillingPeriodReference(year, month),
-            request.OperatorId,
+            User.GetOperatorId(),
             cancellationToken);
 
         return CreatedAtRoute(

@@ -4,7 +4,6 @@ using Evoque.Billing.Api.Services;
 namespace Evoque.Billing.Api.Contracts;
 
 public sealed record CreateBillingDraftRequest(
-    string OperatorId,
     string ExternalCompanyId,
     string CompanyName,
     string CompanyTaxId,
@@ -32,27 +31,21 @@ public sealed record CreateBillingDraftItemRequest(
     decimal UnitAmount,
     string? ExternalMemberId);
 
-public sealed record ApproveBillingDraftRequest(string OperatorId);
-
-public sealed record CreateChargeRequest(string OperatorId, DateOnly DueDate, string ConfirmationPhrase);
+public sealed record CreateChargeRequest(DateOnly DueDate, string ConfirmationPhrase);
 
 public sealed record CreateChargeBatchRequest(
-    string OperatorId,
     DateOnly DueDate,
     string ConfirmationPhrase,
     IReadOnlyCollection<Guid> BillingDraftIds);
 
 public sealed record CreateChargeBatchPreviewRequest(
-    string OperatorId,
     DateOnly DueDate,
     string AsaasEnvironment,
     IReadOnlyCollection<Guid> BillingDraftIds);
 
-public sealed record ApproveChargeBatchRequest(string OperatorId);
+public sealed record ExecuteChargeBatchRequest(string ConfirmationPhrase);
 
-public sealed record ExecuteChargeBatchRequest(string OperatorId, string ConfirmationPhrase);
-
-public sealed record RetryFailedChargeBatchRequest(string OperatorId, string ConfirmationPhrase);
+public sealed record RetryFailedChargeBatchRequest(string ConfirmationPhrase);
 
 public sealed record ChargeBatchItemResponse(
     Guid BillingDraftId,

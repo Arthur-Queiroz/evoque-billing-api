@@ -14,6 +14,7 @@ public sealed class ScheduledChargeBatchService(
     public async Task<ChargeBatchResponse> CreatePreviewAsync(
         BillingPeriodReference billingPeriodReference,
         CreateScheduledChargeBatchPreviewRequest request,
+        string operatorId,
         CancellationToken cancellationToken)
     {
         var billingPeriod = await billingPeriodRepository.FindByReferenceAsync(
@@ -65,10 +66,10 @@ public sealed class ScheduledChargeBatchService(
 
         return await chargeBatchService.CreatePreviewAsync(
             new CreateChargeBatchPreviewRequest(
-                request.OperatorId,
                 request.DueDate,
                 request.AsaasEnvironment,
                 billingDraftIds),
+            operatorId,
             cancellationToken);
     }
 

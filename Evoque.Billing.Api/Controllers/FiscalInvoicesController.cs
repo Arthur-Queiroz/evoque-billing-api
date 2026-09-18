@@ -1,3 +1,4 @@
+using Evoque.Billing.Api.Authentication;
 using Evoque.Billing.Api.Contracts;
 using Evoque.Billing.Api.Domain;
 using Evoque.Billing.Api.Services;
@@ -32,12 +33,11 @@ public sealed class FiscalInvoicesController(FiscalInvoiceService fiscalInvoiceS
     public async Task<ActionResult<IReadOnlyCollection<FiscalInvoiceResponse>>> SynchronizeAsync(
         int year,
         int month,
-        SynchronizeFiscalInvoicesRequest request,
         CancellationToken cancellationToken)
     {
         var fiscalInvoices = await fiscalInvoiceService.SynchronizeAsync(
             new BillingPeriodReference(year, month),
-            request.OperatorId,
+            User.GetOperatorId(),
             cancellationToken);
         return Ok(fiscalInvoices);
     }
@@ -52,6 +52,7 @@ public sealed class FiscalInvoicesController(FiscalInvoiceService fiscalInvoiceS
         var fiscalInvoice = await fiscalInvoiceService.ReissueAsync(
             fiscalInvoiceId,
             request,
+            User.GetOperatorId(),
             cancellationToken);
         return Ok(fiscalInvoice);
     }

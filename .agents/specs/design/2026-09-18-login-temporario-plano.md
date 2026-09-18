@@ -498,8 +498,8 @@ namespace Evoque.Billing.Api.Contracts;
 /// chega perto de 256 caracteres.
 /// </summary>
 public sealed record SignInRequest(
-    [property: Required, MaxLength(256)] string Username,
-    [property: Required, MaxLength(256)] string Password);
+    [Required, MaxLength(256)] string Username,
+    [Required, MaxLength(256)] string Password);
 
 public sealed record SessionResponse(string OperatorId);
 ```
@@ -591,13 +591,16 @@ using Microsoft.AspNetCore.HttpOverrides;
 Depois de `builder.Services.AddControllers();`:
 
 ```csharp
-// A Cloudflare termina o TLS na borda e entrega HTTP ao Nginx. Sem isto a
-// aplicação acredita que a requisição chegou por HTTP e se recusa a emitir um
-// cookie `Secure`: o login funcionaria local e falharia em produção.
+// A Cloudflare termina o TLS na borda e entrega HTTP ao Nginx, então sem isto a
+// aplicação enxerga o esquema e o IP do salto interno, não os do cliente.
+//
+// Isto NÃO afeta o cookie: `CookieSecurePolicy.Always` marca `Secure`
+// incondicionalmente, sem consultar `Request.IsHttps`. O que corrige é o IP do
+// cliente em `X-Forwarded-For`, que sem o middleware chega como o IP do Nginx.
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedFor;
-    options.KnownNetworks.Clear();
+    options.KnownIPNetworks.Clear();
     options.KnownProxies.Clear();
 });
 

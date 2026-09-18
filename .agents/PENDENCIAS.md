@@ -290,6 +290,41 @@ importador precisa saber qual aba pertence à competência sendo faturada.
 
 ## 4. Dívida técnica
 
+### 4.0-b O Nginx diz à API que a requisição chegou por HTTP
+
+**Encontrado em 18/09/2026, na revisão do login temporário.**
+
+`infra/nginx/evoque.conf` usa `proxy_set_header X-Forwarded-Proto $scheme`, e
+`$scheme` é o esquema da conexão que chega **até o Nginx** — sempre `http`,
+porque o TLS termina na borda da Cloudflare e o túnel entrega HTTP na origem.
+Isso sobrescreve com `http` o `https` que a Cloudflare informa.
+
+**Não afeta nada hoje.** O cookie de sessão usa `CookieSecurePolicy.Always`, que
+marca `Secure` sem consultar o esquema, e não existe no código um único leitor de
+`Request.IsHttps` ou `RemoteIpAddress`. É um valor errado que ninguém lê.
+
+Vira defeito no dia em que algo passar a ler — o candidato natural é o IP do
+cliente na auditoria, que hoje chegaria como o IP do Nginx em toda linha.
+
+**A correção**, num `map` de nível `http` (o arquivo é montado em
+`conf.d/default.conf`, que já está dentro do bloco `http`):
+
+```nginx
+map $http_x_forwarded_proto $proxy_x_forwarded_proto {
+    default $http_x_forwarded_proto;
+    ''      $scheme;
+}
+```
+
+e os dois `proxy_set_header X-Forwarded-Proto` passam a usar
+`$proxy_x_forwarded_proto`.
+
+**Por que não foi feito junto:** não há Docker na máquina de desenvolvimento para
+rodar `nginx -t`, e uma configuração inválida derruba portal e API até alguém
+entrar por SSH. Uma mudança que não compra nada hoje não vale subir sem teste.
+Quem for aplicar, valide antes com
+`docker run --rm -v ./infra/nginx/evoque.conf:/etc/nginx/conf.d/default.conf:ro nginx:1.27-alpine nginx -t`.
+
 ### 4.0 Uma falha numa nota interrompe a sincronização das demais
 
 **Encontrado em 17/09/2026, na revisão final do histórico de emissões.**

@@ -12,9 +12,18 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 
-// A Cloudflare termina o TLS na borda e entrega HTTP ao Nginx. Sem isto a
-// aplicação acredita que a requisição chegou por HTTP e se recusa a emitir um
-// cookie `Secure`: o login funcionaria local e falharia em produção.
+// A Cloudflare termina o TLS na borda e entrega HTTP ao Nginx, então sem isto a
+// aplicação enxerga o esquema e o IP do salto interno, não os do cliente.
+//
+// Isto NÃO afeta o cookie de sessão: `CookieSecurePolicy.Always` marca `Secure`
+// incondicionalmente, sem consultar `Request.IsHttps` — comprovado emitindo o
+// cookie por HTTP puro, com e sem `X-Forwarded-Proto`, e visível em
+// `CookieBuilder.Build`, onde `IsHttps` só é lido no caminho `SameAsRequest`.
+//
+// O que isto corrige é o IP do cliente em `X-Forwarded-For`, que sem o
+// middleware chega como o IP do Nginx em toda requisição — inútil para
+// auditoria ou bloqueio por origem —, e o esquema percebido, para o dia em que
+// algo além do cookie depender dele.
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedFor;

@@ -33,6 +33,8 @@ public sealed record CreateBillingDraftItemRequest(
 
 public sealed record CreateChargeRequest(DateOnly DueDate, string ConfirmationPhrase);
 
+public sealed record CancelBillingDraftRequest(string Reason);
+
 public sealed record CreateChargeBatchRequest(
     DateOnly DueDate,
     string ConfirmationPhrase,
@@ -118,6 +120,9 @@ public sealed record BillingDraftResponse(
     DateTimeOffset? ApprovedAt,
     string? AsaasPaymentId,
     string? BankSlipUrl,
+    string? CancelledBy,
+    DateTimeOffset? CancelledAt,
+    string? CancellationReason,
     IReadOnlyCollection<BillingDraftItemResponse> Items)
 {
     public static BillingDraftResponse FromDomain(BillingDraft billingDraft)
@@ -136,6 +141,9 @@ public sealed record BillingDraftResponse(
             billingDraft.ApprovedAt,
             billingDraft.AsaasPaymentId,
             billingDraft.BankSlipUrl,
+            billingDraft.CancelledBy,
+            billingDraft.CancelledAt,
+            billingDraft.CancellationReason,
             billingDraft.Items.Select(item => new BillingDraftItemResponse(
                 item.Description,
                 item.Quantity,

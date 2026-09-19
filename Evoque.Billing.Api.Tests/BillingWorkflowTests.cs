@@ -733,6 +733,118 @@ public sealed class BillingWorkflowTests
         Assert.Contains("Sandbox", excecao.Message, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task CancelAsync_PreservesAuditFieldsAndAllowsANewVersion()
+    {
+        var services = CreateServices();
+        var billingPeriodReference = new BillingPeriodReference(2026, 8);
+        await services.BillingPeriodService.CreateAsync(
+            billingPeriodReference,
+            "maria",
+            CancellationToken.None);
+        var originalBillingDraft = await services.BillingDraftService.CreateAsync(
+            billingPeriodReference,
+            CreateDraftCommand("empresa-1", "Empresa Um"),
+            "maria",
+            CancellationToken.None);
+
+        var cancelledBillingDraft = await services.BillingDraftService.CancelAsync(
+            originalBillingDraft.Id,
+            "Roster da competência foi atualizado.",
+            "geovanna",
+            CancellationToken.None);
+        var replacementBillingDraft = await services.BillingDraftService.CreateAsync(
+            billingPeriodReference,
+            CreateDraftCommand("empresa-1", "Empresa Um"),
+            "geovanna",
+            CancellationToken.None);
+
+        Assert.Equal(BillingDraftStatus.Cancelled, cancelledBillingDraft.Status);
+        Assert.Equal("geovanna", cancelledBillingDraft.CancelledBy);
+        Assert.NotNull(cancelledBillingDraft.CancelledAt);
+        Assert.Equal("Roster da competência foi atualizado.", cancelledBillingDraft.CancellationReason);
+        Assert.Equal(1, cancelledBillingDraft.Version);
+        Assert.Equal(2, replacementBillingDraft.Version);
+        Assert.Equal(BillingDraftStatus.PendingReview, replacementBillingDraft.Status);
+    }
+
+    [Fact]
+    public async Task CancelAsync_RefusesDraftWithASandboxChargeAlreadyCreated()
+    {
+        var services = CreateServices();
+        var billingPeriodReference = new BillingPeriodReference(2026, 8);
+        await services.BillingPeriodService.CreateAsync(
+            billingPeriodReference,
+            "maria",
+            CancellationToken.None);
+        var billingDraft = await services.BillingDraftService.CreateAsync(
+            billingPeriodReference,
+            CreateDraftCommand("empresa-1", "Empresa Um"),
+            "maria",
+            CancellationToken.None);
+        await services.BillingDraftService.ApproveAsync(
+            billingDraft.Id,
+            "maria",
+            CancellationToken.None);
+        var chargeBatch = await services.ChargeBatchService.CreateAsync(
+            new CreateChargeBatchRequest(
+                new DateOnly(2026, 8, 20),
+                "CONFIRMAR",
+                [billingDraft.Id]),
+            "maria",
+            CancellationToken.None);
+
+        var exception = await Assert.ThrowsAsync<ConflictException>(() =>
+            services.BillingDraftService.CancelAsync(
+                billingDraft.Id,
+                "Tentativa indevida.",
+                "geovanna",
+                CancellationToken.None));
+
+        Assert.Equal("Completed", chargeBatch.Status);
+        Assert.Contains("cobrança criada no Asaas", exception.Message);
+    }
+
+    [Fact]
+    public async Task ApproveBatchAsync_RefusesBatchContainingACancelledDraft()
+    {
+        var services = CreateServices();
+        var billingPeriodReference = new BillingPeriodReference(2026, 8);
+        await services.BillingPeriodService.CreateAsync(
+            billingPeriodReference,
+            "maria",
+            CancellationToken.None);
+        var billingDraft = await services.BillingDraftService.CreateAsync(
+            billingPeriodReference,
+            CreateDraftCommand("empresa-1", "Empresa Um"),
+            "maria",
+            CancellationToken.None);
+        await services.BillingDraftService.ApproveAsync(
+            billingDraft.Id,
+            "maria",
+            CancellationToken.None);
+        var chargeBatch = await services.ChargeBatchService.CreatePreviewAsync(
+            new CreateChargeBatchPreviewRequest(
+                new DateOnly(2026, 8, 20),
+                "Sandbox",
+                [billingDraft.Id]),
+            "maria",
+            CancellationToken.None);
+        await services.BillingDraftService.CancelAsync(
+            billingDraft.Id,
+            "Roster da competência foi atualizado.",
+            "geovanna",
+            CancellationToken.None);
+
+        var exception = await Assert.ThrowsAsync<ConflictException>(() =>
+            services.ChargeBatchService.ApproveAsync(
+                chargeBatch.Id,
+                "geovanna",
+                CancellationToken.None));
+
+        Assert.Contains("prévia cancelada", exception.Message);
+    }
+
     private static CreateBillingDraftCommand CreateDraftCommand(string externalCompanyId, string companyName)
     {
         return new CreateBillingDraftCommand(
@@ -814,7 +926,11 @@ public sealed class BillingWorkflowTests
 
         return new TestServices(
             new BillingPeriodService(billingPeriodRepository, auditLogRepository),
-            new BillingDraftService(billingPeriodRepository, billingDraftRepository, auditLogRepository),
+            new BillingDraftService(
+                billingPeriodRepository,
+                billingDraftRepository,
+                chargeBatchRepository,
+                auditLogRepository),
             chargeCreationService,
             chargeBatchService,
             companyBillingScheduleService,

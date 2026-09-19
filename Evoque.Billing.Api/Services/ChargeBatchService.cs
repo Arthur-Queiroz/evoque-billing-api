@@ -62,6 +62,7 @@ public sealed class ChargeBatchService(
         CancellationToken cancellationToken)
     {
         var chargeBatch = await FindChargeBatchAsync(chargeBatchId, cancellationToken);
+        await EnsureBatchContainsNoCancelledDraftsAsync(chargeBatch, cancellationToken);
         var approvedAt = DateTimeOffset.UtcNow;
         chargeBatch.Approve(operatorId, approvedAt);
         await chargeBatchRepository.UpdateAsync(chargeBatch, cancellationToken);
@@ -86,6 +87,7 @@ public sealed class ChargeBatchService(
     {
         EnsureConfirmationPhrase(request.ConfirmationPhrase);
         var chargeBatch = await FindChargeBatchAsync(chargeBatchId, cancellationToken);
+        await EnsureBatchContainsNoCancelledDraftsAsync(chargeBatch, cancellationToken);
         chargeBatch.StartProcessing(DateTimeOffset.UtcNow);
         await chargeBatchRepository.UpdateAsync(chargeBatch, cancellationToken);
         await auditLogRepository.AddAsync(
@@ -319,6 +321,24 @@ public sealed class ChargeBatchService(
     {
         return await chargeBatchRepository.FindByIdAsync(chargeBatchId, cancellationToken)
             ?? throw new NotFoundException("O lote de cobrança não foi encontrado.");
+    }
+
+    private async Task EnsureBatchContainsNoCancelledDraftsAsync(
+        ChargeBatch chargeBatch,
+        CancellationToken cancellationToken)
+    {
+        foreach (var chargeBatchItem in chargeBatch.Items)
+        {
+            var billingDraft = await billingDraftRepository.FindByIdAsync(
+                chargeBatchItem.BillingDraftId,
+                cancellationToken)
+                ?? throw new NotFoundException("Uma das prévias do lote não foi encontrada.");
+            if (billingDraft.Status == BillingDraftStatus.Cancelled)
+            {
+                throw new ConflictException(
+                    "Este lote contém uma prévia cancelada e não pode ser aprovado ou executado.");
+            }
+        }
     }
 
     private static Guid[] NormalizeBillingDraftIds(IReadOnlyCollection<Guid> requestedBillingDraftIds)

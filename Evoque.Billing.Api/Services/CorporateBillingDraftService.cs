@@ -32,9 +32,9 @@ public sealed class CorporateBillingDraftService(
         var existingDrafts = await billingDraftRepository.ListByBillingPeriodIdAsync(
             billingPeriod.Id,
             cancellationToken);
-        var companiesAlreadyDrafted = existingDrafts
-            .Select(billingDraft => billingDraft.CompanyTaxId)
-            .ToHashSet(StringComparer.Ordinal);
+        var existingDraftsByCompany = existingDrafts
+            .GroupBy(billingDraft => billingDraft.CompanyTaxId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
 
         var companies = await companyRepository.ListAsync(cancellationToken);
         var companiesByTaxId = companies.ToDictionary(company => company.TaxId, StringComparer.Ordinal);
@@ -54,7 +54,7 @@ public sealed class CorporateBillingDraftService(
         {
             var company = companiesByTaxId[membersOfCompany.Key];
             var companyMembers = membersOfCompany.ToArray();
-            var refusal = DescribeRefusal(company, companiesAlreadyDrafted);
+            var refusal = DescribeRefusal(company, existingDraftsByCompany);
             if (refusal is not null)
             {
                 skipped.Add(new SkippedCompanyResponse(
@@ -66,6 +66,7 @@ public sealed class CorporateBillingDraftService(
             }
 
             var amountPerMember = company.AmountPerMember!.Value;
+            var version = ResolveNextVersion(company.TaxId, existingDraftsByCompany);
             var billingDraft = new BillingDraft(
                 billingPeriod.Id,
                 company.TaxId,
@@ -79,6 +80,7 @@ public sealed class CorporateBillingDraftService(
                         amountPerMember,
                         member.EvoMemberId.ToString()))
                     .ToArray(),
+                version,
                 generatedAt);
 
             await billingDraftRepository.AddAsync(billingDraft, cancellationToken);
@@ -161,9 +163,10 @@ public sealed class CorporateBillingDraftService(
 
     private static string? DescribeRefusal(
         Company company,
-        IReadOnlySet<string> companiesAlreadyDrafted)
+        IReadOnlyDictionary<string, BillingDraft[]> existingDraftsByCompany)
     {
-        if (companiesAlreadyDrafted.Contains(company.TaxId))
+        if (existingDraftsByCompany.TryGetValue(company.TaxId, out var existingDrafts)
+            && existingDrafts.Any(billingDraft => billingDraft.Status != BillingDraftStatus.Cancelled))
         {
             return "Já existe uma prévia desta empresa nesta competência.";
         }
@@ -179,5 +182,14 @@ public sealed class CorporateBillingDraftService(
         }
 
         return null;
+    }
+
+    private static int ResolveNextVersion(
+        string companyTaxId,
+        IReadOnlyDictionary<string, BillingDraft[]> existingDraftsByCompany)
+    {
+        return existingDraftsByCompany.TryGetValue(companyTaxId, out var existingDrafts)
+            ? existingDrafts.Max(billingDraft => billingDraft.Version) + 1
+            : 1;
     }
 }

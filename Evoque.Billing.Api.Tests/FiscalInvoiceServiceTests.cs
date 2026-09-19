@@ -552,6 +552,7 @@ public sealed class FiscalInvoiceServiceTests
         var billingDraftService = new BillingDraftService(
             billingPeriodRepository,
             billingDraftRepository,
+            chargeBatchRepository,
             auditLogRepository);
         await billingPeriodService.CreateAsync(billingPeriodReference, OperatorId, CancellationToken.None);
         var billingDraft = await billingDraftService.CreateAsync(

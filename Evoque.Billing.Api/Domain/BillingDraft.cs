@@ -29,6 +29,9 @@ public sealed class BillingDraft
             null,
             null,
             null,
+            null,
+            null,
+            null,
             createdAt,
             createdAt)
     {
@@ -60,6 +63,9 @@ public sealed class BillingDraft
             null,
             null,
             null,
+            null,
+            null,
+            null,
             createdAt,
             createdAt)
     {
@@ -82,6 +88,9 @@ public sealed class BillingDraft
         string? cancelledBy,
         DateTimeOffset? cancelledAt,
         string? cancellationReason,
+        string? supersededBy,
+        DateTimeOffset? supersededAt,
+        string? supersessionReason,
         DateTimeOffset createdAt,
         DateTimeOffset updatedAt)
     {
@@ -116,6 +125,9 @@ public sealed class BillingDraft
         CancelledBy = cancelledBy;
         CancelledAt = cancelledAt;
         CancellationReason = cancellationReason;
+        SupersededBy = supersededBy;
+        SupersededAt = supersededAt;
+        SupersessionReason = supersessionReason;
         CreatedAt = createdAt;
         UpdatedAt = updatedAt;
     }
@@ -154,6 +166,12 @@ public sealed class BillingDraft
 
     public string? CancellationReason { get; private set; }
 
+    public string? SupersededBy { get; private set; }
+
+    public DateTimeOffset? SupersededAt { get; private set; }
+
+    public string? SupersessionReason { get; private set; }
+
     public DateTimeOffset CreatedAt { get; }
 
     public DateTimeOffset UpdatedAt { get; private set; }
@@ -175,6 +193,9 @@ public sealed class BillingDraft
         string? cancelledBy,
         DateTimeOffset? cancelledAt,
         string? cancellationReason,
+        string? supersededBy,
+        DateTimeOffset? supersededAt,
+        string? supersessionReason,
         DateTimeOffset createdAt,
         DateTimeOffset updatedAt)
     {
@@ -195,6 +216,9 @@ public sealed class BillingDraft
             cancelledBy,
             cancelledAt,
             cancellationReason,
+            supersededBy,
+            supersededAt,
+            supersessionReason,
             createdAt,
             updatedAt);
     }
@@ -262,5 +286,29 @@ public sealed class BillingDraft
         CancelledAt = cancelledAt;
         CancellationReason = reason.Trim();
         UpdatedAt = cancelledAt;
+    }
+
+    public void Supersede(string operatorId, string reason, DateTimeOffset supersededAt)
+    {
+        if (Status is not BillingDraftStatus.PendingReview and not BillingDraftStatus.Approved)
+        {
+            throw new ConflictException("Somente prévias ativas podem ser substituídas.");
+        }
+
+        if (string.IsNullOrWhiteSpace(operatorId))
+        {
+            throw new ValidationException("O responsável pela substituição é obrigatório.");
+        }
+
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            throw new ValidationException("O motivo da substituição é obrigatório.");
+        }
+
+        Status = BillingDraftStatus.Superseded;
+        SupersededBy = operatorId.Trim();
+        SupersededAt = supersededAt;
+        SupersessionReason = reason.Trim();
+        UpdatedAt = supersededAt;
     }
 }

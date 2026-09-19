@@ -6,4 +6,5 @@ public enum BillingDraftStatus
     Approved,
     ChargeCreated,
     Cancelled,
+    Superseded,
 }

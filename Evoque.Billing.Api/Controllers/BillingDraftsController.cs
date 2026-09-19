@@ -105,6 +105,22 @@ public sealed class BillingDraftsController(
         return Ok(BillingDraftResponse.FromDomain(billingDraft));
     }
 
+    [HttpPost("billing-drafts/{billingDraftId:guid}/supersede-sandbox")]
+    [ProducesResponseType<BillingDraftResponse>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<BillingDraftResponse>> SupersedeSandboxAsync(
+        Guid billingDraftId,
+        SupersedeBillingDraftRequest request,
+        CancellationToken cancellationToken)
+    {
+        var billingDraft = await billingDraftService.SupersedeSandboxDraftAsync(
+            billingDraftId,
+            request.Reason,
+            User.GetOperatorId(),
+            cancellationToken);
+
+        return Ok(BillingDraftResponse.FromDomain(billingDraft));
+    }
+
     [HttpPost("billing-drafts/{billingDraftId:guid}/charges")]
     public async Task<ActionResult> CreateChargeAsync(
         Guid billingDraftId,

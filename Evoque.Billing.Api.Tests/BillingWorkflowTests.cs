@@ -803,6 +803,66 @@ public sealed class BillingWorkflowTests
 
         Assert.Equal("Completed", chargeBatch.Status);
         Assert.Contains("cobrança criada no Asaas", exception.Message);
+
+        var supersededBillingDraft = await services.BillingDraftService.SupersedeSandboxDraftAsync(
+            billingDraft.Id,
+            "O roster correto chegou depois do teste Sandbox.",
+            "geovanna",
+            CancellationToken.None);
+        var replacementBillingDraft = await services.BillingDraftService.CreateAsync(
+            billingPeriodReference,
+            CreateDraftCommand("empresa-1", "Empresa Um"),
+            "geovanna",
+            CancellationToken.None);
+
+        Assert.Equal(BillingDraftStatus.Superseded, supersededBillingDraft.Status);
+        Assert.Equal("geovanna", supersededBillingDraft.SupersededBy);
+        Assert.Equal(2, replacementBillingDraft.Version);
+    }
+
+    [Fact]
+    public async Task SupersedeSandboxDraftAsync_RefusesAProductionCharge()
+    {
+        var services = CreateServices();
+        var billingPeriodReference = new BillingPeriodReference(2026, 8);
+        await services.BillingPeriodService.CreateAsync(
+            billingPeriodReference,
+            "maria",
+            CancellationToken.None);
+        var billingDraft = await services.BillingDraftService.CreateAsync(
+            billingPeriodReference,
+            CreateDraftCommand("empresa-1", "Empresa Um"),
+            "maria",
+            CancellationToken.None);
+        await services.BillingDraftService.ApproveAsync(
+            billingDraft.Id,
+            "maria",
+            CancellationToken.None);
+        var chargeBatch = await services.ChargeBatchService.CreatePreviewAsync(
+            new CreateChargeBatchPreviewRequest(
+                new DateOnly(2026, 8, 20),
+                "Production",
+                [billingDraft.Id]),
+            "maria",
+            CancellationToken.None);
+        await services.ChargeBatchService.ApproveAsync(
+            chargeBatch.Id,
+            "maria",
+            CancellationToken.None);
+        await services.ChargeBatchService.ExecuteAsync(
+            chargeBatch.Id,
+            new ExecuteChargeBatchRequest("CONFIRMAR"),
+            "maria",
+            CancellationToken.None);
+
+        var exception = await Assert.ThrowsAsync<ConflictException>(() =>
+            services.BillingDraftService.SupersedeSandboxDraftAsync(
+                billingDraft.Id,
+                "Tentativa indevida.",
+                "geovanna",
+                CancellationToken.None));
+
+        Assert.Contains("Produção", exception.Message);
     }
 
     [Fact]

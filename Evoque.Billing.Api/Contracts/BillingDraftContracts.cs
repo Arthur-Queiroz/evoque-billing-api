@@ -35,6 +35,8 @@ public sealed record CreateChargeRequest(DateOnly DueDate, string ConfirmationPh
 
 public sealed record CancelBillingDraftRequest(string Reason);
 
+public sealed record SupersedeBillingDraftRequest(string Reason);
+
 public sealed record CreateChargeBatchRequest(
     DateOnly DueDate,
     string ConfirmationPhrase,
@@ -123,6 +125,9 @@ public sealed record BillingDraftResponse(
     string? CancelledBy,
     DateTimeOffset? CancelledAt,
     string? CancellationReason,
+    string? SupersededBy,
+    DateTimeOffset? SupersededAt,
+    string? SupersessionReason,
     IReadOnlyCollection<BillingDraftItemResponse> Items)
 {
     public static BillingDraftResponse FromDomain(BillingDraft billingDraft)
@@ -144,6 +149,9 @@ public sealed record BillingDraftResponse(
             billingDraft.CancelledBy,
             billingDraft.CancelledAt,
             billingDraft.CancellationReason,
+            billingDraft.SupersededBy,
+            billingDraft.SupersededAt,
+            billingDraft.SupersessionReason,
             billingDraft.Items.Select(item => new BillingDraftItemResponse(
                 item.Description,
                 item.Quantity,

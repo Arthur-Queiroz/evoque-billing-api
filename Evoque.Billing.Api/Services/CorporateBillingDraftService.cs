@@ -166,7 +166,9 @@ public sealed class CorporateBillingDraftService(
         IReadOnlyDictionary<string, BillingDraft[]> existingDraftsByCompany)
     {
         if (existingDraftsByCompany.TryGetValue(company.TaxId, out var existingDrafts)
-            && existingDrafts.Any(billingDraft => billingDraft.Status != BillingDraftStatus.Cancelled))
+            && existingDrafts.Any(billingDraft =>
+                billingDraft.Status is not BillingDraftStatus.Cancelled
+                    and not BillingDraftStatus.Superseded))
         {
             return "Já existe uma prévia desta empresa nesta competência.";
         }

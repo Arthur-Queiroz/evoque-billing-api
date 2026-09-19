@@ -37,7 +37,8 @@ public sealed class MySqlBillingDraftRepository(MySqlConnectionFactory connectio
         const string commandText = """
             SELECT id, billing_period_id, external_company_id, company_name, company_tax_id,
                    asaas_customer_id, status, version, approved_by, approved_at, asaas_payment_id,
-                   bank_slip_url, cancelled_by, cancelled_at, cancellation_reason, created_at, updated_at
+                   bank_slip_url, cancelled_by, cancelled_at, cancellation_reason,
+                   superseded_by, superseded_at, supersession_reason, created_at, updated_at
             FROM billing_drafts
             WHERE id = @id;
             """;
@@ -65,7 +66,8 @@ public sealed class MySqlBillingDraftRepository(MySqlConnectionFactory connectio
         const string commandText = """
             SELECT id, billing_period_id, external_company_id, company_name, company_tax_id,
                    asaas_customer_id, status, version, approved_by, approved_at, asaas_payment_id,
-                   bank_slip_url, cancelled_by, cancelled_at, cancellation_reason, created_at, updated_at
+                   bank_slip_url, cancelled_by, cancelled_at, cancellation_reason,
+                   superseded_by, superseded_at, supersession_reason, created_at, updated_at
             FROM billing_drafts
             WHERE billing_period_id = @billingPeriodId
             ORDER BY company_name;
@@ -101,7 +103,8 @@ public sealed class MySqlBillingDraftRepository(MySqlConnectionFactory connectio
         const string commandText = """
             SELECT id, billing_period_id, external_company_id, company_name, company_tax_id,
                    asaas_customer_id, status, version, approved_by, approved_at, asaas_payment_id,
-                   bank_slip_url, cancelled_by, cancelled_at, cancellation_reason, created_at, updated_at
+                   bank_slip_url, cancelled_by, cancelled_at, cancellation_reason,
+                   superseded_by, superseded_at, supersession_reason, created_at, updated_at
             FROM billing_drafts
             WHERE external_company_id = @externalCompanyId
             ORDER BY created_at DESC;
@@ -142,6 +145,9 @@ public sealed class MySqlBillingDraftRepository(MySqlConnectionFactory connectio
                 cancelled_by = @cancelledBy,
                 cancelled_at = @cancelledAt,
                 cancellation_reason = @cancellationReason,
+                superseded_by = @supersededBy,
+                superseded_at = @supersededAt,
+                supersession_reason = @supersessionReason,
                 updated_at = @updatedAt
             WHERE id = @id;
             """;
@@ -158,6 +164,9 @@ public sealed class MySqlBillingDraftRepository(MySqlConnectionFactory connectio
         command.Parameters.AddWithValue("@cancelledBy", billingDraft.CancelledBy ?? (object)DBNull.Value);
         command.Parameters.AddWithValue("@cancelledAt", billingDraft.CancelledAt?.UtcDateTime ?? (object)DBNull.Value);
         command.Parameters.AddWithValue("@cancellationReason", billingDraft.CancellationReason ?? (object)DBNull.Value);
+        command.Parameters.AddWithValue("@supersededBy", billingDraft.SupersededBy ?? (object)DBNull.Value);
+        command.Parameters.AddWithValue("@supersededAt", billingDraft.SupersededAt?.UtcDateTime ?? (object)DBNull.Value);
+        command.Parameters.AddWithValue("@supersessionReason", billingDraft.SupersessionReason ?? (object)DBNull.Value);
         command.Parameters.AddWithValue("@updatedAt", billingDraft.UpdatedAt.UtcDateTime);
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
@@ -256,6 +265,9 @@ public sealed class MySqlBillingDraftRepository(MySqlConnectionFactory connectio
             GetNullableString(reader, "cancelled_by"),
             GetNullableUtcDateTime(reader, "cancelled_at"),
             GetNullableString(reader, "cancellation_reason"),
+            GetNullableString(reader, "superseded_by"),
+            GetNullableUtcDateTime(reader, "superseded_at"),
+            GetNullableString(reader, "supersession_reason"),
             GetUtcDateTime(reader, "created_at"),
             GetUtcDateTime(reader, "updated_at"));
     }
@@ -281,6 +293,9 @@ public sealed class MySqlBillingDraftRepository(MySqlConnectionFactory connectio
             billingDraftData.CancelledBy,
             billingDraftData.CancelledAt,
             billingDraftData.CancellationReason,
+            billingDraftData.SupersededBy,
+            billingDraftData.SupersededAt,
+            billingDraftData.SupersessionReason,
             billingDraftData.CreatedAt,
             billingDraftData.UpdatedAt);
     }
@@ -316,6 +331,9 @@ public sealed class MySqlBillingDraftRepository(MySqlConnectionFactory connectio
         string? CancelledBy,
         DateTimeOffset? CancelledAt,
         string? CancellationReason,
+        string? SupersededBy,
+        DateTimeOffset? SupersededAt,
+        string? SupersessionReason,
         DateTimeOffset CreatedAt,
         DateTimeOffset UpdatedAt);
 }

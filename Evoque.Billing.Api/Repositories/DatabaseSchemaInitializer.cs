@@ -19,6 +19,7 @@ public sealed class DatabaseSchemaInitializer(MySqlConnectionFactory connectionF
     private const string ChargePaymentStatusMigrationId = "013_add_charge_payment_status";
     private const string CompanyAmountPerMemberMigrationId = "014_add_company_amount_per_member";
     private const string BillingDraftCancellationMigrationId = "015_add_billing_draft_cancellation";
+    private const string BillingDraftSupersessionMigrationId = "016_add_billing_draft_supersession";
 
     public async Task InitializeAsync(CancellationToken cancellationToken)
     {
@@ -204,6 +205,31 @@ public sealed class DatabaseSchemaInitializer(MySqlConnectionFactory connectionF
         await AddChargePaymentStatusAsync(connection, cancellationToken);
         await AddCompanyAmountPerMemberAsync(connection, cancellationToken);
         await AddBillingDraftCancellationAsync(connection, cancellationToken);
+        await AddBillingDraftSupersessionAsync(connection, cancellationToken);
+    }
+
+    private static async Task AddBillingDraftSupersessionAsync(
+        MySqlConnection connection,
+        CancellationToken cancellationToken)
+    {
+        if (await IsAppliedAsync(connection, BillingDraftSupersessionMigrationId, cancellationToken))
+        {
+            return;
+        }
+
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        await ExecuteAsync(connection, """
+            ALTER TABLE billing_drafts
+            ADD COLUMN superseded_by VARCHAR(255) NULL AFTER cancellation_reason,
+            ADD COLUMN superseded_at DATETIME(6) NULL AFTER superseded_by,
+            ADD COLUMN supersession_reason TEXT NULL AFTER superseded_at;
+            """, transaction, cancellationToken);
+        await InsertMigrationAsync(
+            connection,
+            transaction,
+            BillingDraftSupersessionMigrationId,
+            cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
     }
 
     private static async Task AddBillingDraftCancellationAsync(

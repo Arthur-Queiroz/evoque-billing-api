@@ -107,6 +107,50 @@ public sealed class BillingDraftService(
         return billingDraft;
     }
 
+    public async Task<BillingDraft> SupersedeSandboxDraftAsync(
+        Guid billingDraftId,
+        string reason,
+        string operatorId,
+        CancellationToken cancellationToken)
+    {
+        var billingDraft = await GetBillingDraftAsync(billingDraftId, cancellationToken);
+        var chargeBatches = await chargeBatchRepository.ListByBillingPeriodIdAsync(
+            billingDraft.BillingPeriodId,
+            cancellationToken);
+        var batchesWithCreatedCharge = chargeBatches
+            .Where(chargeBatch => chargeBatch.Items.Any(item =>
+                item.BillingDraftId == billingDraft.Id
+                && !string.IsNullOrWhiteSpace(item.AsaasPaymentId)))
+            .ToArray();
+        if (batchesWithCreatedCharge.Length == 0)
+        {
+            throw new ConflictException(
+                "Esta prévia não possui cobrança Sandbox criada. Cancele-a em vez de substituí-la.");
+        }
+
+        if (batchesWithCreatedCharge.Any(chargeBatch =>
+                chargeBatch.AsaasEnvironment == AsaasEnvironment.Production))
+        {
+            throw new ConflictException(
+                "Uma prévia com cobrança criada no Asaas Produção não pode ser substituída.");
+        }
+
+        var supersededAt = DateTimeOffset.UtcNow;
+        billingDraft.Supersede(operatorId, reason, supersededAt);
+        await billingDraftRepository.UpdateAsync(billingDraft, cancellationToken);
+        await auditLogRepository.AddAsync(
+            AuditLog.Create(
+                "billing-draft.superseded-after-sandbox",
+                operatorId,
+                supersededAt,
+                billingDraft.BillingPeriodId,
+                billingDraft.Id,
+                $"Prévia versão {billingDraft.Version} substituída após teste Sandbox. Motivo: {billingDraft.SupersessionReason}"),
+            cancellationToken);
+
+        return billingDraft;
+    }
+
     public async Task<IReadOnlyCollection<BillingDraft>> ListAsync(
         BillingPeriodReference reference,
         CancellationToken cancellationToken)
@@ -166,7 +210,8 @@ public sealed class BillingDraftService(
                     StringComparison.OrdinalIgnoreCase))
             .ToArray();
         if (companyDrafts.Any(existingBillingDraft =>
-                existingBillingDraft.Status != BillingDraftStatus.Cancelled))
+                existingBillingDraft.Status is not BillingDraftStatus.Cancelled
+                    and not BillingDraftStatus.Superseded))
         {
             throw new ConflictException(
                 "Já existe uma prévia para esta empresa e competência.");
@@ -210,7 +255,8 @@ public sealed class BillingDraftService(
             || billingDrafts.Any(billingDraft =>
                 billingDraft.Status is not BillingDraftStatus.Approved
                     and not BillingDraftStatus.ChargeCreated
-                    and not BillingDraftStatus.Cancelled))
+                    and not BillingDraftStatus.Cancelled
+                    and not BillingDraftStatus.Superseded))
         {
             return;
         }

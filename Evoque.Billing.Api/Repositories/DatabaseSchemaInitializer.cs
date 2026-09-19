@@ -18,6 +18,7 @@ public sealed class DatabaseSchemaInitializer(MySqlConnectionFactory connectionF
     private const string FiscalInvoiceDocumentsMigrationId = "012_add_fiscal_invoice_documents";
     private const string ChargePaymentStatusMigrationId = "013_add_charge_payment_status";
     private const string CompanyAmountPerMemberMigrationId = "014_add_company_amount_per_member";
+    private const string BillingDraftCancellationMigrationId = "015_add_billing_draft_cancellation";
 
     public async Task InitializeAsync(CancellationToken cancellationToken)
     {
@@ -202,6 +203,31 @@ public sealed class DatabaseSchemaInitializer(MySqlConnectionFactory connectionF
         await AddFiscalInvoiceDocumentsAsync(connection, cancellationToken);
         await AddChargePaymentStatusAsync(connection, cancellationToken);
         await AddCompanyAmountPerMemberAsync(connection, cancellationToken);
+        await AddBillingDraftCancellationAsync(connection, cancellationToken);
+    }
+
+    private static async Task AddBillingDraftCancellationAsync(
+        MySqlConnection connection,
+        CancellationToken cancellationToken)
+    {
+        if (await IsAppliedAsync(connection, BillingDraftCancellationMigrationId, cancellationToken))
+        {
+            return;
+        }
+
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        await ExecuteAsync(connection, """
+            ALTER TABLE billing_drafts
+            ADD COLUMN cancelled_by VARCHAR(255) NULL AFTER bank_slip_url,
+            ADD COLUMN cancelled_at DATETIME(6) NULL AFTER cancelled_by,
+            ADD COLUMN cancellation_reason TEXT NULL AFTER cancelled_at;
+            """, transaction, cancellationToken);
+        await InsertMigrationAsync(
+            connection,
+            transaction,
+            BillingDraftCancellationMigrationId,
+            cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
     }
 
     /// <summary>

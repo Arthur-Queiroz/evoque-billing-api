@@ -7,6 +7,7 @@ namespace Evoque.Billing.Api.Services;
 public sealed class ChargeCreationService(
     IBillingPeriodRepository billingPeriodRepository,
     IBillingDraftRepository billingDraftRepository,
+    ICompanyRepository companyRepository,
     IAuditLogRepository auditLogRepository,
     IAsaasCustomerNotificationGateway asaasCustomerNotificationGateway,
     IAsaasChargeGateway asaasChargeGateway,
@@ -48,9 +49,23 @@ public sealed class ChargeCreationService(
             throw new ConflictException("A prévia precisa estar aprovada antes de criar uma cobrança.");
         }
 
-        if (string.IsNullOrWhiteSpace(billingDraft.AsaasCustomerId))
+        // O cliente vem do catálogo, no ambiente deste lote, e não do que a
+        // prévia guardou. O identificador pertence a um ambiente: o do Sandbox
+        // não existe na conta de Produção, e a prévia é criada sem saber em qual
+        // lote vai ser executada.
+        //
+        // `BillingDraft.AsaasCustomerId` ainda existe e é gravado, mas não
+        // decide mais nada aqui. Remover o campo é trabalho à parte.
+        var company = await companyRepository.FindByTaxIdAsync(billingDraft.CompanyTaxId, cancellationToken)
+            ?? throw new NotFoundException(
+                $"A empresa {CompanyTaxId.Format(billingDraft.CompanyTaxId)} não está no catálogo.");
+
+        var asaasCustomerId = company.AsaasCustomerIdFor(asaasEnvironment);
+        if (string.IsNullOrWhiteSpace(asaasCustomerId))
         {
-            throw new ValidationException("A empresa não possui identificador de cliente no Asaas.");
+            throw new ValidationException(
+                $"A empresa {company.DisplayName} não tem cliente Asaas sincronizado no ambiente "
+                + $"{asaasEnvironment}. Sincronize o cliente antes de criar a cobrança.");
         }
 
         var billingPeriod = (await billingPeriodRepository.ListAsync(cancellationToken))
@@ -64,7 +79,7 @@ public sealed class ChargeCreationService(
 
         var emailDeliveryReadiness = await asaasCustomerNotificationGateway.GetEmailDeliveryReadinessAsync(
             asaasEnvironment,
-            billingDraft.AsaasCustomerId,
+            asaasCustomerId,
             cancellationToken);
         if (!emailDeliveryReadiness.HasEmailRecipient)
         {
@@ -80,7 +95,7 @@ public sealed class ChargeCreationService(
         var asaasCharge = await asaasChargeGateway.CreateChargeAsync(
             asaasEnvironment,
             new AsaasChargeRequest(
-                billingDraft.AsaasCustomerId,
+                asaasCustomerId,
                 billingDraft.TotalAmount,
                 dueDate,
                 $"Faturamento Evoque {billingPeriod.Reference} - {billingDraft.CompanyName}",

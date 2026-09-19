@@ -146,6 +146,29 @@ public sealed class CorporateBillingDraftServiceTests
     }
 
     [Fact]
+    public async Task GenerateAsync_CreatesANewVersionAfterThePreviousDraftWasCancelled()
+    {
+        var scenario = new TestScenario();
+        scenario.AddCompany(OpenSportsTaxId, "Open Sports", 89.90m);
+        scenario.AddMembers(OpenSportsTaxId, 2);
+        await scenario.GenerateAsync();
+        var originalBillingDraft = scenario.DataStore.BillingDrafts.Single().Value;
+        originalBillingDraft.Cancel(
+            OperatorId,
+            "Roster da competência foi atualizado.",
+            DateTimeOffset.UtcNow);
+
+        var secondResult = await scenario.GenerateAsync();
+
+        Assert.Single(secondResult.Created);
+        var drafts = scenario.DataStore.BillingDrafts.Values.OrderBy(draft => draft.Version).ToArray();
+        Assert.Equal(2, drafts.Length);
+        Assert.Equal(BillingDraftStatus.Cancelled, drafts[0].Status);
+        Assert.Equal(2, drafts[1].Version);
+        Assert.Equal(BillingDraftStatus.PendingReview, drafts[1].Status);
+    }
+
+    [Fact]
     public async Task GenerateAsync_KeepsGoingAfterACompanyIsSkipped()
     {
         var scenario = new TestScenario();

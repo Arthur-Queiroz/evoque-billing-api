@@ -37,7 +37,7 @@ public sealed class MySqlBillingDraftRepository(MySqlConnectionFactory connectio
         const string commandText = """
             SELECT id, billing_period_id, external_company_id, company_name, company_tax_id,
                    asaas_customer_id, status, version, approved_by, approved_at, asaas_payment_id,
-                   bank_slip_url, created_at, updated_at
+                   bank_slip_url, cancelled_by, cancelled_at, cancellation_reason, created_at, updated_at
             FROM billing_drafts
             WHERE id = @id;
             """;
@@ -65,7 +65,7 @@ public sealed class MySqlBillingDraftRepository(MySqlConnectionFactory connectio
         const string commandText = """
             SELECT id, billing_period_id, external_company_id, company_name, company_tax_id,
                    asaas_customer_id, status, version, approved_by, approved_at, asaas_payment_id,
-                   bank_slip_url, created_at, updated_at
+                   bank_slip_url, cancelled_by, cancelled_at, cancellation_reason, created_at, updated_at
             FROM billing_drafts
             WHERE billing_period_id = @billingPeriodId
             ORDER BY company_name;
@@ -101,7 +101,7 @@ public sealed class MySqlBillingDraftRepository(MySqlConnectionFactory connectio
         const string commandText = """
             SELECT id, billing_period_id, external_company_id, company_name, company_tax_id,
                    asaas_customer_id, status, version, approved_by, approved_at, asaas_payment_id,
-                   bank_slip_url, created_at, updated_at
+                   bank_slip_url, cancelled_by, cancelled_at, cancellation_reason, created_at, updated_at
             FROM billing_drafts
             WHERE external_company_id = @externalCompanyId
             ORDER BY created_at DESC;
@@ -139,6 +139,9 @@ public sealed class MySqlBillingDraftRepository(MySqlConnectionFactory connectio
                 approved_at = @approvedAt,
                 asaas_payment_id = @asaasPaymentId,
                 bank_slip_url = @bankSlipUrl,
+                cancelled_by = @cancelledBy,
+                cancelled_at = @cancelledAt,
+                cancellation_reason = @cancellationReason,
                 updated_at = @updatedAt
             WHERE id = @id;
             """;
@@ -152,6 +155,9 @@ public sealed class MySqlBillingDraftRepository(MySqlConnectionFactory connectio
         command.Parameters.AddWithValue("@approvedAt", billingDraft.ApprovedAt?.UtcDateTime ?? (object)DBNull.Value);
         command.Parameters.AddWithValue("@asaasPaymentId", billingDraft.AsaasPaymentId ?? (object)DBNull.Value);
         command.Parameters.AddWithValue("@bankSlipUrl", billingDraft.BankSlipUrl ?? (object)DBNull.Value);
+        command.Parameters.AddWithValue("@cancelledBy", billingDraft.CancelledBy ?? (object)DBNull.Value);
+        command.Parameters.AddWithValue("@cancelledAt", billingDraft.CancelledAt?.UtcDateTime ?? (object)DBNull.Value);
+        command.Parameters.AddWithValue("@cancellationReason", billingDraft.CancellationReason ?? (object)DBNull.Value);
         command.Parameters.AddWithValue("@updatedAt", billingDraft.UpdatedAt.UtcDateTime);
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
@@ -247,6 +253,9 @@ public sealed class MySqlBillingDraftRepository(MySqlConnectionFactory connectio
             GetNullableUtcDateTime(reader, "approved_at"),
             GetNullableString(reader, "asaas_payment_id"),
             GetNullableString(reader, "bank_slip_url"),
+            GetNullableString(reader, "cancelled_by"),
+            GetNullableUtcDateTime(reader, "cancelled_at"),
+            GetNullableString(reader, "cancellation_reason"),
             GetUtcDateTime(reader, "created_at"),
             GetUtcDateTime(reader, "updated_at"));
     }
@@ -269,6 +278,9 @@ public sealed class MySqlBillingDraftRepository(MySqlConnectionFactory connectio
             billingDraftData.ApprovedAt,
             billingDraftData.AsaasPaymentId,
             billingDraftData.BankSlipUrl,
+            billingDraftData.CancelledBy,
+            billingDraftData.CancelledAt,
+            billingDraftData.CancellationReason,
             billingDraftData.CreatedAt,
             billingDraftData.UpdatedAt);
     }
@@ -301,6 +313,9 @@ public sealed class MySqlBillingDraftRepository(MySqlConnectionFactory connectio
         DateTimeOffset? ApprovedAt,
         string? AsaasPaymentId,
         string? BankSlipUrl,
+        string? CancelledBy,
+        DateTimeOffset? CancelledAt,
+        string? CancellationReason,
         DateTimeOffset CreatedAt,
         DateTimeOffset UpdatedAt);
 }

@@ -6,6 +6,7 @@ namespace Evoque.Billing.Api.Services;
 public sealed class BillingDraftService(
     IBillingPeriodRepository billingPeriodRepository,
     IBillingDraftRepository billingDraftRepository,
+    IChargeBatchRepository chargeBatchRepository,
     IAuditLogRepository auditLogRepository)
 {
     public async Task<BillingDraft> CreateAsync(
@@ -16,7 +17,7 @@ public sealed class BillingDraftService(
     {
         var billingPeriod = await GetBillingPeriodAsync(reference, cancellationToken);
         ValidateNewDraft(billingPeriod);
-        await ValidateDraftDoesNotAlreadyExistAsync(
+        var version = await ResolveNextVersionAsync(
             billingPeriod.Id,
             command.ExternalCompanyId,
             cancellationToken);
@@ -38,6 +39,7 @@ public sealed class BillingDraftService(
             command.CompanyTaxId,
             command.AsaasCustomerId,
             items,
+            version,
             createdAt);
 
         billingPeriod.MarkAwaitingReview(createdAt);
@@ -77,6 +79,31 @@ public sealed class BillingDraftService(
             cancellationToken);
 
         await MarkBillingPeriodApprovedWhenReadyAsync(billingDraft.BillingPeriodId, operatorId, cancellationToken);
+        return billingDraft;
+    }
+
+    public async Task<BillingDraft> CancelAsync(
+        Guid billingDraftId,
+        string reason,
+        string operatorId,
+        CancellationToken cancellationToken)
+    {
+        var billingDraft = await GetBillingDraftAsync(billingDraftId, cancellationToken);
+        await EnsureNoChargeWasCreatedAsync(billingDraft, cancellationToken);
+
+        var cancelledAt = DateTimeOffset.UtcNow;
+        billingDraft.Cancel(operatorId, reason, cancelledAt);
+        await billingDraftRepository.UpdateAsync(billingDraft, cancellationToken);
+        await auditLogRepository.AddAsync(
+            AuditLog.Create(
+                "billing-draft.cancelled",
+                operatorId,
+                cancelledAt,
+                billingDraft.BillingPeriodId,
+                billingDraft.Id,
+                $"Prévia versão {billingDraft.Version} cancelada. Motivo: {billingDraft.CancellationReason}"),
+            cancellationToken);
+
         return billingDraft;
     }
 
@@ -123,7 +150,7 @@ public sealed class BillingDraftService(
         }
     }
 
-    private async Task ValidateDraftDoesNotAlreadyExistAsync(
+    private async Task<int> ResolveNextVersionAsync(
         Guid billingPeriodId,
         string externalCompanyId,
         CancellationToken cancellationToken)
@@ -131,14 +158,45 @@ public sealed class BillingDraftService(
         var existingBillingDrafts = await billingDraftRepository.ListByBillingPeriodIdAsync(
             billingPeriodId,
             cancellationToken);
-        if (existingBillingDrafts.Any(existingBillingDraft =>
+        var companyDrafts = existingBillingDrafts
+            .Where(existingBillingDraft =>
                 string.Equals(
                     existingBillingDraft.ExternalCompanyId,
                     externalCompanyId,
-                    StringComparison.OrdinalIgnoreCase)))
+                    StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        if (companyDrafts.Any(existingBillingDraft =>
+                existingBillingDraft.Status != BillingDraftStatus.Cancelled))
         {
             throw new ConflictException(
                 "Já existe uma prévia para esta empresa e competência.");
+        }
+
+        return companyDrafts.Length == 0
+            ? 1
+            : companyDrafts.Max(existingBillingDraft => existingBillingDraft.Version) + 1;
+    }
+
+    private async Task EnsureNoChargeWasCreatedAsync(
+        BillingDraft billingDraft,
+        CancellationToken cancellationToken)
+    {
+        if (!string.IsNullOrWhiteSpace(billingDraft.AsaasPaymentId))
+        {
+            throw new ConflictException("Uma prévia com cobrança criada no Asaas não pode ser cancelada.");
+        }
+
+        var chargeBatches = await chargeBatchRepository.ListByBillingPeriodIdAsync(
+            billingDraft.BillingPeriodId,
+            cancellationToken);
+        var createdCharge = chargeBatches
+            .SelectMany(chargeBatch => chargeBatch.Items)
+            .FirstOrDefault(item =>
+                item.BillingDraftId == billingDraft.Id
+                && !string.IsNullOrWhiteSpace(item.AsaasPaymentId));
+        if (createdCharge is not null)
+        {
+            throw new ConflictException("Uma prévia com cobrança criada no Asaas não pode ser cancelada.");
         }
     }
 
@@ -151,7 +209,8 @@ public sealed class BillingDraftService(
         if (billingDrafts.Count == 0
             || billingDrafts.Any(billingDraft =>
                 billingDraft.Status is not BillingDraftStatus.Approved
-                    and not BillingDraftStatus.ChargeCreated))
+                    and not BillingDraftStatus.ChargeCreated
+                    and not BillingDraftStatus.Cancelled))
         {
             return;
         }

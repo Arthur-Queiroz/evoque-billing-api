@@ -326,6 +326,21 @@ public sealed class Company
         RegisterUpdate(operatorId, linkedAt);
     }
 
+    /// <summary>
+    /// O cliente Asaas desta empresa no ambiente pedido, ou <c>null</c> quando
+    /// ele ainda não foi sincronizado.
+    ///
+    /// Existe porque o identificador pertence a um ambiente: o do Sandbox não
+    /// existe na conta de Produção. Quem cria a cobrança precisa perguntar pelo
+    /// ambiente do lote, e não reaproveitar um identificador guardado antes.
+    /// </summary>
+    public string? AsaasCustomerIdFor(AsaasEnvironment asaasEnvironment)
+    {
+        return asaasEnvironment == AsaasEnvironment.Sandbox
+            ? AsaasSandboxCustomerId
+            : AsaasProductionCustomerId;
+    }
+
     public void SetIssRetention(bool retainsIss, string operatorId, DateTimeOffset updatedAt)
     {
         RetainsIss = retainsIss;

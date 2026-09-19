@@ -89,6 +89,22 @@ public sealed class BillingDraftsController(
         return Ok(BillingDraftResponse.FromDomain(billingDraft));
     }
 
+    [HttpPost("billing-drafts/{billingDraftId:guid}/cancel")]
+    [ProducesResponseType<BillingDraftResponse>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<BillingDraftResponse>> CancelAsync(
+        Guid billingDraftId,
+        CancelBillingDraftRequest request,
+        CancellationToken cancellationToken)
+    {
+        var billingDraft = await billingDraftService.CancelAsync(
+            billingDraftId,
+            request.Reason,
+            User.GetOperatorId(),
+            cancellationToken);
+
+        return Ok(BillingDraftResponse.FromDomain(billingDraft));
+    }
+
     [HttpPost("billing-drafts/{billingDraftId:guid}/charges")]
     public async Task<ActionResult> CreateChargeAsync(
         Guid billingDraftId,

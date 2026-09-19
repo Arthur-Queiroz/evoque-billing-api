@@ -605,12 +605,252 @@ public sealed class BillingWorkflowTests
         Assert.Equal(3, asaasChargeGateway.CallCount);
     }
 
+    /// <summary>
+    /// A prévia gerada a partir do catálogo nasce sem identificador de cliente
+    /// Asaas, de propósito: ele pertence a um ambiente, e a prévia não sabe em
+    /// qual lote vai ser executada. Quem resolve é a execução, consultando o
+    /// catálogo no ambiente do lote.
+    ///
+    /// Sem isto, nenhuma das prévias geradas do catálogo viraria cobrança.
+    /// </summary>
+    [Fact]
+    public async Task CreateAsync_ResolvesTheAsaasCustomerFromTheCatalogue()
+    {
+        var asaasChargeGateway = new RecordingAsaasChargeGateway();
+        var services = CreateServices(asaasChargeGateway);
+        var billingPeriodReference = new BillingPeriodReference(2026, 8);
+        const string companyTaxId = "56087276000103";
+
+        await services.BillingPeriodService.CreateAsync(billingPeriodReference, "maria", CancellationToken.None);
+        var company = Company.CreateManually(companyTaxId, "Open Sports", "maria", DateTimeOffset.UtcNow);
+        company.LinkAsaasCustomer(
+            AsaasEnvironment.Sandbox, "cus_sandbox_open", "maria", DateTimeOffset.UtcNow);
+        await services.CompanyRepository.UpsertAsync(company, CancellationToken.None);
+
+        var billingDraft = await services.BillingDraftService.CreateAsync(
+            billingPeriodReference,
+            new CreateBillingDraftCommand(
+                companyTaxId,
+                "Open Sports",
+                companyTaxId,
+                AsaasCustomerId: null,
+                [new CreateBillingDraftItemCommand("Plano corporativo", 1, 89.90m, "member-1")]),
+            "maria",
+            CancellationToken.None);
+        await services.BillingDraftService.ApproveAsync(billingDraft.Id, "maria", CancellationToken.None);
+
+        var resultado = await services.ChargeCreationService.CreateAsync(
+            billingDraft.Id,
+            new DateOnly(2026, 8, 10),
+            "maria",
+            "CONFIRMAR",
+            AsaasEnvironment.Sandbox,
+            CancellationToken.None);
+
+        Assert.NotNull(resultado.AsaasPaymentId);
+        Assert.Equal("cus_sandbox_open", asaasChargeGateway.LastCustomerId);
+    }
+
+    /// <summary>
+    /// O bug que a pendência 1.1 descreve: a prévia importada guardava o cliente
+    /// do Sandbox, e um lote de Produção o enviaria para a conta real, onde ele
+    /// não existe. O ambiente do lote é quem decide.
+    /// </summary>
+    [Fact]
+    public async Task CreateAsync_UsesTheCustomerOfTheEnvironmentTheBatchRunsIn()
+    {
+        var asaasChargeGateway = new RecordingAsaasChargeGateway();
+        var services = CreateServices(asaasChargeGateway);
+        var billingPeriodReference = new BillingPeriodReference(2026, 8);
+        const string companyTaxId = "56087276000103";
+
+        await services.BillingPeriodService.CreateAsync(billingPeriodReference, "maria", CancellationToken.None);
+        var company = Company.CreateManually(companyTaxId, "Open Sports", "maria", DateTimeOffset.UtcNow);
+        company.LinkAsaasCustomer(
+            AsaasEnvironment.Sandbox, "cus_sandbox_open", "maria", DateTimeOffset.UtcNow);
+        company.LinkAsaasCustomer(
+            AsaasEnvironment.Production, "cus_producao_open", "maria", DateTimeOffset.UtcNow);
+        await services.CompanyRepository.UpsertAsync(company, CancellationToken.None);
+
+        var billingDraft = await services.BillingDraftService.CreateAsync(
+            billingPeriodReference,
+            new CreateBillingDraftCommand(
+                companyTaxId,
+                "Open Sports",
+                companyTaxId,
+                AsaasCustomerId: "cus_sandbox_open",
+                [new CreateBillingDraftItemCommand("Plano corporativo", 1, 89.90m, "member-1")]),
+            "maria",
+            CancellationToken.None);
+        await services.BillingDraftService.ApproveAsync(billingDraft.Id, "maria", CancellationToken.None);
+
+        await services.ChargeCreationService.CreateAsync(
+            billingDraft.Id,
+            new DateOnly(2026, 8, 10),
+            "maria",
+            "CONFIRMAR",
+            AsaasEnvironment.Production,
+            CancellationToken.None);
+
+        Assert.Equal("cus_producao_open", asaasChargeGateway.LastCustomerId);
+    }
+
+    /// <summary>
+    /// A empresa existe e tem preço, mas ninguém sincronizou o cliente espelho
+    /// naquele ambiente. A mensagem precisa dizer isso, e não "não encontrado".
+    /// </summary>
+    [Fact]
+    public async Task CreateAsync_RefusesWhenTheCompanyHasNoCustomerInThatEnvironment()
+    {
+        var services = CreateServices();
+        var billingPeriodReference = new BillingPeriodReference(2026, 8);
+        const string companyTaxId = "56087276000103";
+
+        await services.BillingPeriodService.CreateAsync(billingPeriodReference, "maria", CancellationToken.None);
+        var company = Company.CreateManually(companyTaxId, "Open Sports", "maria", DateTimeOffset.UtcNow);
+        await services.CompanyRepository.UpsertAsync(company, CancellationToken.None);
+
+        var billingDraft = await services.BillingDraftService.CreateAsync(
+            billingPeriodReference,
+            new CreateBillingDraftCommand(
+                companyTaxId,
+                "Open Sports",
+                companyTaxId,
+                AsaasCustomerId: null,
+                [new CreateBillingDraftItemCommand("Plano corporativo", 1, 89.90m, "member-1")]),
+            "maria",
+            CancellationToken.None);
+        await services.BillingDraftService.ApproveAsync(billingDraft.Id, "maria", CancellationToken.None);
+
+        var excecao = await Assert.ThrowsAsync<ValidationException>(() =>
+            services.ChargeCreationService.CreateAsync(
+                billingDraft.Id,
+                new DateOnly(2026, 8, 10),
+                "maria",
+                "CONFIRMAR",
+                AsaasEnvironment.Sandbox,
+                CancellationToken.None));
+        Assert.Contains("Sandbox", excecao.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task CancelAsync_PreservesAuditFieldsAndAllowsANewVersion()
+    {
+        var services = CreateServices();
+        var billingPeriodReference = new BillingPeriodReference(2026, 8);
+        await services.BillingPeriodService.CreateAsync(
+            billingPeriodReference,
+            "maria",
+            CancellationToken.None);
+        var originalBillingDraft = await services.BillingDraftService.CreateAsync(
+            billingPeriodReference,
+            CreateDraftCommand("empresa-1", "Empresa Um"),
+            "maria",
+            CancellationToken.None);
+
+        var cancelledBillingDraft = await services.BillingDraftService.CancelAsync(
+            originalBillingDraft.Id,
+            "Roster da competência foi atualizado.",
+            "geovanna",
+            CancellationToken.None);
+        var replacementBillingDraft = await services.BillingDraftService.CreateAsync(
+            billingPeriodReference,
+            CreateDraftCommand("empresa-1", "Empresa Um"),
+            "geovanna",
+            CancellationToken.None);
+
+        Assert.Equal(BillingDraftStatus.Cancelled, cancelledBillingDraft.Status);
+        Assert.Equal("geovanna", cancelledBillingDraft.CancelledBy);
+        Assert.NotNull(cancelledBillingDraft.CancelledAt);
+        Assert.Equal("Roster da competência foi atualizado.", cancelledBillingDraft.CancellationReason);
+        Assert.Equal(1, cancelledBillingDraft.Version);
+        Assert.Equal(2, replacementBillingDraft.Version);
+        Assert.Equal(BillingDraftStatus.PendingReview, replacementBillingDraft.Status);
+    }
+
+    [Fact]
+    public async Task CancelAsync_RefusesDraftWithASandboxChargeAlreadyCreated()
+    {
+        var services = CreateServices();
+        var billingPeriodReference = new BillingPeriodReference(2026, 8);
+        await services.BillingPeriodService.CreateAsync(
+            billingPeriodReference,
+            "maria",
+            CancellationToken.None);
+        var billingDraft = await services.BillingDraftService.CreateAsync(
+            billingPeriodReference,
+            CreateDraftCommand("empresa-1", "Empresa Um"),
+            "maria",
+            CancellationToken.None);
+        await services.BillingDraftService.ApproveAsync(
+            billingDraft.Id,
+            "maria",
+            CancellationToken.None);
+        var chargeBatch = await services.ChargeBatchService.CreateAsync(
+            new CreateChargeBatchRequest(
+                new DateOnly(2026, 8, 20),
+                "CONFIRMAR",
+                [billingDraft.Id]),
+            "maria",
+            CancellationToken.None);
+
+        var exception = await Assert.ThrowsAsync<ConflictException>(() =>
+            services.BillingDraftService.CancelAsync(
+                billingDraft.Id,
+                "Tentativa indevida.",
+                "geovanna",
+                CancellationToken.None));
+
+        Assert.Equal("Completed", chargeBatch.Status);
+        Assert.Contains("cobrança criada no Asaas", exception.Message);
+    }
+
+    [Fact]
+    public async Task ApproveBatchAsync_RefusesBatchContainingACancelledDraft()
+    {
+        var services = CreateServices();
+        var billingPeriodReference = new BillingPeriodReference(2026, 8);
+        await services.BillingPeriodService.CreateAsync(
+            billingPeriodReference,
+            "maria",
+            CancellationToken.None);
+        var billingDraft = await services.BillingDraftService.CreateAsync(
+            billingPeriodReference,
+            CreateDraftCommand("empresa-1", "Empresa Um"),
+            "maria",
+            CancellationToken.None);
+        await services.BillingDraftService.ApproveAsync(
+            billingDraft.Id,
+            "maria",
+            CancellationToken.None);
+        var chargeBatch = await services.ChargeBatchService.CreatePreviewAsync(
+            new CreateChargeBatchPreviewRequest(
+                new DateOnly(2026, 8, 20),
+                "Sandbox",
+                [billingDraft.Id]),
+            "maria",
+            CancellationToken.None);
+        await services.BillingDraftService.CancelAsync(
+            billingDraft.Id,
+            "Roster da competência foi atualizado.",
+            "geovanna",
+            CancellationToken.None);
+
+        var exception = await Assert.ThrowsAsync<ConflictException>(() =>
+            services.ChargeBatchService.ApproveAsync(
+                chargeBatch.Id,
+                "geovanna",
+                CancellationToken.None));
+
+        Assert.Contains("prévia cancelada", exception.Message);
+    }
+
     private static CreateBillingDraftCommand CreateDraftCommand(string externalCompanyId, string companyName)
     {
         return new CreateBillingDraftCommand(
             externalCompanyId,
             companyName,
-            "12345678000199",
+            "02346076000107",
             "cus_000123",
             [
                 new CreateBillingDraftItemCommand("Plano corporativo", 2, 79.90m, "member-1"),
@@ -630,6 +870,18 @@ public sealed class BillingWorkflowTests
         var companyBillingScheduleRepository = new InMemoryCompanyBillingScheduleRepository(dataStore);
         var companyRepository = new InMemoryCompanyRepository(dataStore);
 
+        // A previa sempre pertence a uma empresa do catalogo: a importacao
+        // vincula pelo CNPJ. Desde que a criacao da cobranca resolve o cliente
+        // Asaas pelo catalogo, e nao pelo que a previa guardou, os cenarios
+        // precisam dessa empresa existir com cliente nos dois ambientes.
+        var defaultCompany = Company.CreateManually(
+            "02346076000107", "Empresa de teste", "maria", DateTimeOffset.UtcNow);
+        defaultCompany.LinkAsaasCustomer(
+            AsaasEnvironment.Sandbox, "cus_000123", "maria", DateTimeOffset.UtcNow);
+        defaultCompany.LinkAsaasCustomer(
+            AsaasEnvironment.Production, "cus_000123", "maria", DateTimeOffset.UtcNow);
+        dataStore.Companies[defaultCompany.TaxId] = defaultCompany;
+
         // Relógio fixo: os vencimentos dos cenários são datas fixas de 2026, e um
         // TimeProvider real faria a suíte quebrar sozinha assim que o calendário
         // ultrapassasse essas datas.
@@ -637,6 +889,7 @@ public sealed class BillingWorkflowTests
         var chargeCreationService = new ChargeCreationService(
             billingPeriodRepository,
             billingDraftRepository,
+            companyRepository,
             auditLogRepository,
             notificationGateway ?? new RecordingAsaasCustomerNotificationGateway(
                 new AsaasCustomerEmailDeliveryReadiness(true, true)),
@@ -673,7 +926,11 @@ public sealed class BillingWorkflowTests
 
         return new TestServices(
             new BillingPeriodService(billingPeriodRepository, auditLogRepository),
-            new BillingDraftService(billingPeriodRepository, billingDraftRepository, auditLogRepository),
+            new BillingDraftService(
+                billingPeriodRepository,
+                billingDraftRepository,
+                chargeBatchRepository,
+                auditLogRepository),
             chargeCreationService,
             chargeBatchService,
             companyBillingScheduleService,
@@ -701,12 +958,19 @@ public sealed class BillingWorkflowTests
 
         public bool WasCalled => CallCount > 0;
 
+        /// <summary>
+        /// O cliente Asaas que a ultima cobranca recebeu. E o que prova de onde
+        /// o identificador veio: da previa ou do catalogo, e de qual ambiente.
+        /// </summary>
+        public string? LastCustomerId { get; private set; }
+
         public Task<AsaasChargeCreation> CreateChargeAsync(
             AsaasEnvironment asaasEnvironment,
             AsaasChargeRequest request,
             CancellationToken cancellationToken)
         {
             CallCount++;
+            LastCustomerId = request.CustomerId;
             if (CallCount == failOnCall)
             {
                 throw new ExternalOperationNotAllowedException("Falha simulada do Asaas.");

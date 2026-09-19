@@ -506,11 +506,20 @@ public sealed class FiscalInvoiceServiceTests
             OperatorId,
             DateTimeOffset.UtcNow);
         company.SetIssRetention(retainsIss, OperatorId, DateTimeOffset.UtcNow);
+
+        // Desde que a criacao da cobranca resolve o cliente Asaas pelo catalogo,
+        // e nao pelo que a previa guardou, a empresa do cenario precisa ter o
+        // vinculo nos dois ambientes.
+        company.LinkAsaasCustomer(
+            AsaasEnvironment.Sandbox, "cus_000123", OperatorId, DateTimeOffset.UtcNow);
+        company.LinkAsaasCustomer(
+            AsaasEnvironment.Production, "cus_000123", OperatorId, DateTimeOffset.UtcNow);
         await companyRepository.UpsertAsync(company, CancellationToken.None);
 
         var chargeCreationService = new ChargeCreationService(
             billingPeriodRepository,
             billingDraftRepository,
+            companyRepository,
             auditLogRepository,
             new AlwaysReadyNotificationGateway(),
             new StubAsaasChargeGateway(),
@@ -543,6 +552,7 @@ public sealed class FiscalInvoiceServiceTests
         var billingDraftService = new BillingDraftService(
             billingPeriodRepository,
             billingDraftRepository,
+            chargeBatchRepository,
             auditLogRepository);
         await billingPeriodService.CreateAsync(billingPeriodReference, OperatorId, CancellationToken.None);
         var billingDraft = await billingDraftService.CreateAsync(

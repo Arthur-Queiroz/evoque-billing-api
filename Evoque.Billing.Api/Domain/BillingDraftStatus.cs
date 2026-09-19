@@ -5,4 +5,5 @@ public enum BillingDraftStatus
     PendingReview,
     Approved,
     ChargeCreated,
+    Cancelled,
 }

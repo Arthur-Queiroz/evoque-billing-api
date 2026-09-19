@@ -26,6 +26,40 @@ public sealed class BillingDraft
             null,
             null,
             null,
+            null,
+            null,
+            null,
+            createdAt,
+            createdAt)
+    {
+    }
+
+    public BillingDraft(
+        Guid billingPeriodId,
+        string externalCompanyId,
+        string companyName,
+        string companyTaxId,
+        string? asaasCustomerId,
+        IReadOnlyCollection<BillingDraftItem> items,
+        int version,
+        DateTimeOffset createdAt)
+        : this(
+            Guid.NewGuid(),
+            billingPeriodId,
+            externalCompanyId,
+            companyName,
+            companyTaxId,
+            asaasCustomerId,
+            items,
+            BillingDraftStatus.PendingReview,
+            version,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
             createdAt,
             createdAt)
     {
@@ -45,6 +79,9 @@ public sealed class BillingDraft
         DateTimeOffset? approvedAt,
         string? asaasPaymentId,
         string? bankSlipUrl,
+        string? cancelledBy,
+        DateTimeOffset? cancelledAt,
+        string? cancellationReason,
         DateTimeOffset createdAt,
         DateTimeOffset updatedAt)
     {
@@ -76,6 +113,9 @@ public sealed class BillingDraft
         ApprovedAt = approvedAt;
         AsaasPaymentId = asaasPaymentId;
         BankSlipUrl = bankSlipUrl;
+        CancelledBy = cancelledBy;
+        CancelledAt = cancelledAt;
+        CancellationReason = cancellationReason;
         CreatedAt = createdAt;
         UpdatedAt = updatedAt;
     }
@@ -108,6 +148,12 @@ public sealed class BillingDraft
 
     public string? BankSlipUrl { get; private set; }
 
+    public string? CancelledBy { get; private set; }
+
+    public DateTimeOffset? CancelledAt { get; private set; }
+
+    public string? CancellationReason { get; private set; }
+
     public DateTimeOffset CreatedAt { get; }
 
     public DateTimeOffset UpdatedAt { get; private set; }
@@ -126,6 +172,9 @@ public sealed class BillingDraft
         DateTimeOffset? approvedAt,
         string? asaasPaymentId,
         string? bankSlipUrl,
+        string? cancelledBy,
+        DateTimeOffset? cancelledAt,
+        string? cancellationReason,
         DateTimeOffset createdAt,
         DateTimeOffset updatedAt)
     {
@@ -143,6 +192,9 @@ public sealed class BillingDraft
             approvedAt,
             asaasPaymentId,
             bankSlipUrl,
+            cancelledBy,
+            cancelledAt,
+            cancellationReason,
             createdAt,
             updatedAt);
     }
@@ -181,5 +233,34 @@ public sealed class BillingDraft
         AsaasPaymentId = asaasPaymentId;
         BankSlipUrl = bankSlipUrl;
         UpdatedAt = updatedAt;
+    }
+
+    public void Cancel(string operatorId, string reason, DateTimeOffset cancelledAt)
+    {
+        if (Status is not BillingDraftStatus.PendingReview and not BillingDraftStatus.Approved)
+        {
+            throw new ConflictException("Somente prévias sem cobrança podem ser canceladas.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(AsaasPaymentId))
+        {
+            throw new ConflictException("Uma prévia com cobrança criada no Asaas não pode ser cancelada.");
+        }
+
+        if (string.IsNullOrWhiteSpace(operatorId))
+        {
+            throw new ValidationException("O responsável pelo cancelamento é obrigatório.");
+        }
+
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            throw new ValidationException("O motivo do cancelamento é obrigatório.");
+        }
+
+        Status = BillingDraftStatus.Cancelled;
+        CancelledBy = operatorId.Trim();
+        CancelledAt = cancelledAt;
+        CancellationReason = reason.Trim();
+        UpdatedAt = cancelledAt;
     }
 }

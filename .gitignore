@@ -3,4 +3,4 @@ obj/
 .vs/
 TestResults/
 appsettings.Development.json
-
+.local/

@@ -81,8 +81,13 @@ conferência.
 
 ### Regras do valor
 
-`null` significa sem fee. Valor negativo é recusado. Zero é normalizado para
-`null`, para não existirem duas representações do mesmo estado.
+`null` significa sem fee. Zero e valores negativos são recusados, com a
+orientação de informar vazio para retirar a taxa.
+
+Essa é exatamente a regra de `SetAmountPerMember`, e a igualdade é deliberada:
+dois campos quase idênticos com regras diferentes de valor vazio é uma armadilha
+de leitura. Recusar zero também garante uma única representação de "sem fee",
+que era o objetivo.
 
 ### Geração da prévia
 

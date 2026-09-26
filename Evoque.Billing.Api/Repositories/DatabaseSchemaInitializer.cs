@@ -20,6 +20,7 @@ public sealed class DatabaseSchemaInitializer(MySqlConnectionFactory connectionF
     private const string CompanyAmountPerMemberMigrationId = "014_add_company_amount_per_member";
     private const string BillingDraftCancellationMigrationId = "015_add_billing_draft_cancellation";
     private const string BillingDraftSupersessionMigrationId = "016_add_billing_draft_supersession";
+    private const string SferaAmountPerMemberMigrationId = "017_correct_sfera_amount_per_member";
 
     public async Task InitializeAsync(CancellationToken cancellationToken)
     {
@@ -206,6 +207,7 @@ public sealed class DatabaseSchemaInitializer(MySqlConnectionFactory connectionF
         await AddCompanyAmountPerMemberAsync(connection, cancellationToken);
         await AddBillingDraftCancellationAsync(connection, cancellationToken);
         await AddBillingDraftSupersessionAsync(connection, cancellationToken);
+        await CorrectSferaAmountPerMemberAsync(connection, cancellationToken);
     }
 
     private static async Task AddBillingDraftSupersessionAsync(
@@ -361,6 +363,39 @@ public sealed class DatabaseSchemaInitializer(MySqlConnectionFactory connectionF
             connection,
             transaction,
             CompanyAmountPerMemberMigrationId,
+            cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// A Sfera nasceu na 014 com R$ 89,90 por colaborador, mas ela possui um
+    /// desconto exclusivo: o valor correto é R$ 74,91. A 014 já foi aplicada e
+    /// migrations aplicadas não são editadas, então a correção vem aqui.
+    ///
+    /// A condição sobre o valor atual existe para não sobrescrever um preço que
+    /// alguém já tenha ajustado pela tela depois desta migration ser escrita.
+    /// </summary>
+    private static async Task CorrectSferaAmountPerMemberAsync(
+        MySqlConnection connection,
+        CancellationToken cancellationToken)
+    {
+        if (await IsAppliedAsync(connection, SferaAmountPerMemberMigrationId, cancellationToken))
+        {
+            return;
+        }
+
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        await ExecuteAsync(connection, """
+            UPDATE companies
+            SET amount_per_member = 74.91
+            WHERE tax_id = '45871604000141' AND amount_per_member = 89.90;
+            """, transaction, cancellationToken);
+
+        await InsertMigrationAsync(
+            connection,
+            transaction,
+            SferaAmountPerMemberMigrationId,
             cancellationToken);
         await transaction.CommitAsync(cancellationToken);
     }

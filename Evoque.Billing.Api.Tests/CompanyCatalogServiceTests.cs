@@ -905,4 +905,45 @@ public sealed class CompanyCatalogServiceTests
             throw new InvalidOperationException("Falha externa simulada.");
         }
     }
+
+    [Fact]
+    public void NewCompany_HasNoFeePerMemberYet()
+    {
+        var company = Company.CreateManually("02346076000107", "Ciamon", OperatorId, DateTimeOffset.UtcNow);
+
+        Assert.Null(company.FeePerMember);
+    }
+
+    [Fact]
+    public void SetFeePerMember_StoresTheAgreedFee()
+    {
+        var company = Company.CreateManually("02346076000107", "Ciamon", OperatorId, DateTimeOffset.UtcNow);
+
+        company.SetFeePerMember(8.00m, OperatorId, DateTimeOffset.UtcNow);
+
+        Assert.Equal(8.00m, company.FeePerMember);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    [InlineData(-8.00)]
+    public void SetFeePerMember_RefusesSomethingThatIsNotAFee(decimal fee)
+    {
+        var company = Company.CreateManually("02346076000107", "Ciamon", OperatorId, DateTimeOffset.UtcNow);
+
+        Assert.Throws<ValidationException>(
+            () => company.SetFeePerMember(fee, OperatorId, DateTimeOffset.UtcNow));
+    }
+
+    [Fact]
+    public void SetFeePerMember_AcceptsNullToClearIt()
+    {
+        var company = Company.CreateManually("02346076000107", "Ciamon", OperatorId, DateTimeOffset.UtcNow);
+        company.SetFeePerMember(8.00m, OperatorId, DateTimeOffset.UtcNow);
+
+        company.SetFeePerMember(null, OperatorId, DateTimeOffset.UtcNow);
+
+        Assert.Null(company.FeePerMember);
+    }
 }

@@ -127,6 +127,14 @@ public sealed class Company
     public decimal? AmountPerMember { get; private set; }
 
     /// <summary>
+    /// Taxa administrativa que a empresa paga por colaborador, somada à
+    /// mensalidade. Vem do acordo comercial, não do EVO.
+    ///
+    /// Nulo é o estado normal: das empresas do catálogo, só oito pagam taxa.
+    /// </summary>
+    public decimal? FeePerMember { get; private set; }
+
+    /// <summary>
     /// Empresa pronta para gerar prévia. Faturar exige preço; cadastrar, não.
     /// </summary>
     public bool CanBeBilled => IsActive && AmountPerMember is > 0m;
@@ -356,6 +364,18 @@ public sealed class Company
         }
 
         AmountPerMember = amountPerMember;
+        RegisterUpdate(operatorId, updatedAt);
+    }
+
+    public void SetFeePerMember(decimal? feePerMember, string operatorId, DateTimeOffset updatedAt)
+    {
+        if (feePerMember is <= 0m)
+        {
+            throw new ValidationException(
+                "A taxa por colaborador deve ser maior que zero. Para retirar a taxa, informe vazio.");
+        }
+
+        FeePerMember = feePerMember;
         RegisterUpdate(operatorId, updatedAt);
     }
 

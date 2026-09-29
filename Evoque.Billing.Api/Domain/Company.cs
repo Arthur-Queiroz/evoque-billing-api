@@ -213,6 +213,7 @@ public sealed class Company
         string? asaasProductionCustomerId,
         bool retainsIss,
         decimal? amountPerMember,
+        decimal? feePerMember,
         string createdBy,
         DateTimeOffset createdAt,
         string updatedBy,
@@ -235,6 +236,7 @@ public sealed class Company
             AsaasProductionCustomerId = asaasProductionCustomerId,
             RetainsIss = retainsIss,
             AmountPerMember = amountPerMember,
+            FeePerMember = feePerMember,
             UpdatedBy = updatedBy,
             UpdatedAt = updatedAt,
         };

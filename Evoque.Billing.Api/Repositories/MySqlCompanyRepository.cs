@@ -15,6 +15,7 @@ public sealed class MySqlCompanyRepository(MySqlConnectionFactory connectionFact
              last_import_id, requires_review_after_reappearing,
              asaas_sandbox_customer_id, asaas_production_customer_id, retains_iss,
              amount_per_member,
+             fee_per_member,
              created_by, created_at, updated_by, updated_at)
         VALUES
             (@taxId, @displayName, @evoName, @legalName, @tradeName, @registrationStatus,
@@ -25,6 +26,7 @@ public sealed class MySqlCompanyRepository(MySqlConnectionFactory connectionFact
              @lastImportId, @requiresReviewAfterReappearing,
              @asaasSandboxCustomerId, @asaasProductionCustomerId, @retainsIss,
              @amountPerMember,
+             @feePerMember,
              @createdBy, @createdAt, @updatedBy, @updatedAt)
         ON DUPLICATE KEY UPDATE
             display_name = VALUES(display_name),
@@ -52,6 +54,7 @@ public sealed class MySqlCompanyRepository(MySqlConnectionFactory connectionFact
             asaas_production_customer_id = VALUES(asaas_production_customer_id),
             retains_iss = VALUES(retains_iss),
             amount_per_member = VALUES(amount_per_member),
+            fee_per_member = VALUES(fee_per_member),
             updated_by = VALUES(updated_by),
             updated_at = VALUES(updated_at);
         """;
@@ -65,6 +68,7 @@ public sealed class MySqlCompanyRepository(MySqlConnectionFactory connectionFact
                last_import_id, requires_review_after_reappearing,
                asaas_sandbox_customer_id, asaas_production_customer_id, retains_iss,
                amount_per_member,
+               fee_per_member,
                created_by, created_at, updated_by, updated_at
         FROM companies
         """;
@@ -159,6 +163,9 @@ public sealed class MySqlCompanyRepository(MySqlConnectionFactory connectionFact
         command.Parameters.AddWithValue(
             "@amountPerMember",
             company.AmountPerMember.HasValue ? company.AmountPerMember.Value : (object)DBNull.Value);
+        command.Parameters.AddWithValue(
+            "@feePerMember",
+            company.FeePerMember.HasValue ? company.FeePerMember.Value : (object)DBNull.Value);
         command.Parameters.AddWithValue("@createdBy", company.CreatedBy);
         command.Parameters.AddWithValue("@createdAt", company.CreatedAt.UtcDateTime);
         command.Parameters.AddWithValue("@updatedBy", company.UpdatedBy);
@@ -192,6 +199,9 @@ public sealed class MySqlCompanyRepository(MySqlConnectionFactory connectionFact
             reader.IsDBNull(reader.GetOrdinal("amount_per_member"))
                 ? null
                 : reader.GetDecimal("amount_per_member"),
+            reader.IsDBNull(reader.GetOrdinal("fee_per_member"))
+                ? null
+                : reader.GetDecimal("fee_per_member"),
             reader.GetString("created_by"),
             new DateTimeOffset(DateTime.SpecifyKind(reader.GetDateTime("created_at"), DateTimeKind.Utc)),
             reader.GetString("updated_by"),

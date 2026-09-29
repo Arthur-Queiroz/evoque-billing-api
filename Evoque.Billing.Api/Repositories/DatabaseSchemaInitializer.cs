@@ -21,6 +21,7 @@ public sealed class DatabaseSchemaInitializer(MySqlConnectionFactory connectionF
     private const string BillingDraftCancellationMigrationId = "015_add_billing_draft_cancellation";
     private const string BillingDraftSupersessionMigrationId = "016_add_billing_draft_supersession";
     private const string SferaAmountPerMemberMigrationId = "017_correct_sfera_amount_per_member";
+    private const string CompanyFeePerMemberMigrationId = "018_add_company_fee_per_member";
 
     public async Task InitializeAsync(CancellationToken cancellationToken)
     {
@@ -208,6 +209,7 @@ public sealed class DatabaseSchemaInitializer(MySqlConnectionFactory connectionF
         await AddBillingDraftCancellationAsync(connection, cancellationToken);
         await AddBillingDraftSupersessionAsync(connection, cancellationToken);
         await CorrectSferaAmountPerMemberAsync(connection, cancellationToken);
+        await AddCompanyFeePerMemberAsync(connection, cancellationToken);
     }
 
     private static async Task AddBillingDraftSupersessionAsync(
@@ -396,6 +398,60 @@ public sealed class DatabaseSchemaInitializer(MySqlConnectionFactory connectionF
             connection,
             transaction,
             SferaAmountPerMemberMigrationId,
+            cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// A taxa administrativa por colaborador, cobrada por oito empresas do
+    /// catálogo. Ela vinha da coluna VALOR FEE do controle operacional e nunca
+    /// chegou ao software, porque o EVO descreve quem é colaborador e não o que
+    /// foi combinado comercialmente.
+    ///
+    /// Os valores são semeados aqui, e não por endpoint depois, para ficarem
+    /// versionados e revisáveis — e para o deploy não depender de alguém
+    /// lembrar de um passo manual.
+    ///
+    /// A Ciasul entra por decisão explícita: a matriz não tem linha no controle,
+    /// só as duas filiais, e as filiais foram tratadas como evidência do grupo.
+    /// </summary>
+    private static async Task AddCompanyFeePerMemberAsync(
+        MySqlConnection connection,
+        CancellationToken cancellationToken)
+    {
+        if (await IsAppliedAsync(connection, CompanyFeePerMemberMigrationId, cancellationToken))
+        {
+            return;
+        }
+
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        if (!await ColumnExistsAsync(connection, transaction, "companies", "fee_per_member", cancellationToken))
+        {
+            await ExecuteAsync(connection, """
+                ALTER TABLE companies
+                ADD COLUMN fee_per_member DECIMAL(18, 2) NULL AFTER amount_per_member;
+                """, transaction, cancellationToken);
+        }
+
+        await ExecuteAsync(connection, """
+            UPDATE companies SET fee_per_member = CASE tax_id
+                WHEN '34818653000102' THEN 8.00
+                WHEN '53164208000102' THEN 8.00
+                WHEN '58515495000171' THEN 8.00
+                WHEN '26626384000146' THEN 8.00
+                WHEN '34480924000154' THEN 8.00
+                WHEN '01330329000183' THEN 9.90
+                WHEN '04026384000172' THEN 9.90
+                WHEN '04967119000199' THEN 9.90
+                ELSE fee_per_member
+            END;
+            """, transaction, cancellationToken);
+
+        await InsertMigrationAsync(
+            connection,
+            transaction,
+            CompanyFeePerMemberMigrationId,
             cancellationToken);
         await transaction.CommitAsync(cancellationToken);
     }

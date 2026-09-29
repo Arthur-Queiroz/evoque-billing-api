@@ -16,6 +16,7 @@ public sealed record GeneratedBillingDraftResponse(
     string CompanyName,
     int MemberCount,
     decimal AmountPerMember,
+    decimal? FeePerMember,
     decimal TotalAmount);
 
 public sealed record SkippedCompanyResponse(

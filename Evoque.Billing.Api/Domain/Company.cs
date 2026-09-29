@@ -127,6 +127,15 @@ public sealed class Company
     public decimal? AmountPerMember { get; private set; }
 
     /// <summary>
+    /// Taxa administrativa que a empresa paga por colaborador, somada à
+    /// mensalidade. Vem do acordo comercial, não do EVO.
+    ///
+    /// Nulo é o estado normal: a maioria das empresas do catálogo não paga
+    /// taxa administrativa.
+    /// </summary>
+    public decimal? FeePerMember { get; private set; }
+
+    /// <summary>
     /// Empresa pronta para gerar prévia. Faturar exige preço; cadastrar, não.
     /// </summary>
     public bool CanBeBilled => IsActive && AmountPerMember is > 0m;
@@ -204,6 +213,7 @@ public sealed class Company
         string? asaasProductionCustomerId,
         bool retainsIss,
         decimal? amountPerMember,
+        decimal? feePerMember,
         string createdBy,
         DateTimeOffset createdAt,
         string updatedBy,
@@ -226,6 +236,7 @@ public sealed class Company
             AsaasProductionCustomerId = asaasProductionCustomerId,
             RetainsIss = retainsIss,
             AmountPerMember = amountPerMember,
+            FeePerMember = feePerMember,
             UpdatedBy = updatedBy,
             UpdatedAt = updatedAt,
         };
@@ -356,6 +367,23 @@ public sealed class Company
         }
 
         AmountPerMember = amountPerMember;
+        RegisterUpdate(operatorId, updatedAt);
+    }
+
+    /// <summary>
+    /// Zero e negativo não são taxa. Aceitar zero como sinônimo de "sem taxa"
+    /// criaria duas representações para o mesmo estado, quebrando a regra
+    /// única que já vale para <see cref="AmountPerMember"/>.
+    /// </summary>
+    public void SetFeePerMember(decimal? feePerMember, string operatorId, DateTimeOffset updatedAt)
+    {
+        if (feePerMember is <= 0m)
+        {
+            throw new ValidationException(
+                "A taxa por colaborador deve ser maior que zero. Para retirar a taxa, informe vazio.");
+        }
+
+        FeePerMember = feePerMember;
         RegisterUpdate(operatorId, updatedAt);
     }
 

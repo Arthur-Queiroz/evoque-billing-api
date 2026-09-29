@@ -13,6 +13,7 @@ public sealed class CompanyCatalogServiceTests
 {
     private const string OpenSportsTaxId = "56087276000103";
     private const string WebPradoTaxId = "43322169000170";
+    private const string ContractTaxId = "58515495000171";
 
     /// <summary>
     /// CNPJ real do sindicato dos metalúrgicos, que apareceu na exportação do
@@ -352,6 +353,32 @@ public sealed class CompanyCatalogServiceTests
 
         var listed = await catalog.Service.GetAsync(OpenSportsTaxId, CancellationToken.None);
         Assert.Equal(89.90m, listed.AmountPerMember);
+    }
+
+    /// <summary>
+    /// A taxa precisa atravessar o cadastro e voltar na leitura, pelo mesmo
+    /// motivo do valor por colaborador: sem isto ela existiria no domínio e
+    /// seria invisível para quem opera.
+    /// </summary>
+    [Fact]
+    public async Task UpdateAsync_StoresAndReturnsTheFeePerMember()
+    {
+        var catalog = CreateCatalog();
+        await catalog.Service.CreateAsync(
+            new CreateCompanyRequest(ContractTaxId, "Contract", 25),
+            OperatorId,
+            CancellationToken.None);
+
+        var updated = await catalog.Service.UpdateAsync(
+            ContractTaxId,
+            new UpdateCompanyRequest("Contract", 25, 59.90m, 8.00m),
+            OperatorId,
+            CancellationToken.None);
+
+        Assert.Equal(8.00m, updated.FeePerMember);
+
+        var listed = await catalog.Service.GetAsync(ContractTaxId, CancellationToken.None);
+        Assert.Equal(8.00m, listed.FeePerMember);
     }
 
     [Fact]
@@ -904,5 +931,46 @@ public sealed class CompanyCatalogServiceTests
         {
             throw new InvalidOperationException("Falha externa simulada.");
         }
+    }
+
+    [Fact]
+    public void NewCompany_HasNoFeePerMemberYet()
+    {
+        var company = Company.CreateManually("02346076000107", "Ciamon", OperatorId, DateTimeOffset.UtcNow);
+
+        Assert.Null(company.FeePerMember);
+    }
+
+    [Fact]
+    public void SetFeePerMember_StoresTheAgreedFee()
+    {
+        var company = Company.CreateManually("02346076000107", "Ciamon", OperatorId, DateTimeOffset.UtcNow);
+
+        company.SetFeePerMember(8.00m, OperatorId, DateTimeOffset.UtcNow);
+
+        Assert.Equal(8.00m, company.FeePerMember);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    [InlineData(-8.00)]
+    public void SetFeePerMember_RefusesSomethingThatIsNotAFee(decimal fee)
+    {
+        var company = Company.CreateManually("02346076000107", "Ciamon", OperatorId, DateTimeOffset.UtcNow);
+
+        Assert.Throws<ValidationException>(
+            () => company.SetFeePerMember(fee, OperatorId, DateTimeOffset.UtcNow));
+    }
+
+    [Fact]
+    public void SetFeePerMember_AcceptsNullToClearIt()
+    {
+        var company = Company.CreateManually("02346076000107", "Ciamon", OperatorId, DateTimeOffset.UtcNow);
+        company.SetFeePerMember(8.00m, OperatorId, DateTimeOffset.UtcNow);
+
+        company.SetFeePerMember(null, OperatorId, DateTimeOffset.UtcNow);
+
+        Assert.Null(company.FeePerMember);
     }
 }

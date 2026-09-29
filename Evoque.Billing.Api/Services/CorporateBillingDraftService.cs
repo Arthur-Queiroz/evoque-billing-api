@@ -74,7 +74,7 @@ public sealed class CorporateBillingDraftService(
                 company.DisplayName,
                 company.TaxId,
                 null,
-                BuildItems(companyMembers, amountPerMember, feePerMember),
+                BuildDraftItems(companyMembers, amountPerMember, feePerMember),
                 version,
                 generatedAt);
 
@@ -86,9 +86,7 @@ public sealed class CorporateBillingDraftService(
                     generatedAt,
                     billingPeriod.Id,
                     billingDraft.Id,
-                    feePerMember is > 0m
-                        ? $"{companyMembers.Length} colaborador(es) x {amountPerMember:F2} mais taxa de {feePerMember.Value:F2} por colaborador para {company.DisplayName}."
-                        : $"{companyMembers.Length} colaborador(es) x {amountPerMember:F2} para {company.DisplayName}."),
+                    DescribeGeneratedDraft(companyMembers.Length, amountPerMember, feePerMember, company.DisplayName)),
                 cancellationToken);
 
             created.Add(new GeneratedBillingDraftResponse(
@@ -123,7 +121,7 @@ public sealed class CorporateBillingDraftService(
     /// embutido, a distinção entre mensalidade e taxa desaparece do sistema e
     /// a conferência contra o controle operacional para de bater.
     /// </summary>
-    private static IReadOnlyCollection<BillingDraftItem> BuildItems(
+    private static IReadOnlyCollection<BillingDraftItem> BuildDraftItems(
         IReadOnlyCollection<CorporateMember> companyMembers,
         decimal amountPerMember,
         decimal? feePerMember)
@@ -146,6 +144,22 @@ public sealed class CorporateBillingDraftService(
         }
 
         return items;
+    }
+
+    /// <summary>
+    /// Mensagem de auditoria da geração: extraída porque a condição do
+    /// texto da taxa não deve ficar escondida no meio da lista de
+    /// argumentos de <see cref="AuditLog.Create"/>.
+    /// </summary>
+    private static string DescribeGeneratedDraft(
+        int memberCount,
+        decimal amountPerMember,
+        decimal? feePerMember,
+        string companyName)
+    {
+        return feePerMember is > 0m
+            ? $"{memberCount} colaborador(es) x {amountPerMember:F2} mais taxa de {feePerMember.Value:F2} por colaborador para {companyName}."
+            : $"{memberCount} colaborador(es) x {amountPerMember:F2} para {companyName}.";
     }
 
     private static IEnumerable<IGrouping<string, CorporateMember>> GroupBillableMembers(

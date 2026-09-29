@@ -201,7 +201,7 @@ public sealed class CorporateBillingDraftServiceTests
     /// precisam gerar exatamente a prévia que já geravam antes.
     /// </summary>
     [Fact]
-    public async Task GenerateAsync_AddsNoFeeItemToACompanyWithoutAFee()
+    public async Task GenerateAsync_MatchesPreviousTotalForACompanyWithoutAFee()
     {
         var scenario = new TestScenario();
         scenario.AddCompany(OpenSportsTaxId, "Open Sports", 89.90m);

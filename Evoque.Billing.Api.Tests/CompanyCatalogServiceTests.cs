@@ -13,6 +13,7 @@ public sealed class CompanyCatalogServiceTests
 {
     private const string OpenSportsTaxId = "56087276000103";
     private const string WebPradoTaxId = "43322169000170";
+    private const string ContractTaxId = "58515495000171";
 
     /// <summary>
     /// CNPJ real do sindicato dos metalúrgicos, que apareceu na exportação do
@@ -364,19 +365,19 @@ public sealed class CompanyCatalogServiceTests
     {
         var catalog = CreateCatalog();
         await catalog.Service.CreateAsync(
-            new CreateCompanyRequest("58515495000171", "Contract", 25),
+            new CreateCompanyRequest(ContractTaxId, "Contract", 25),
             OperatorId,
             CancellationToken.None);
 
         var updated = await catalog.Service.UpdateAsync(
-            "58515495000171",
+            ContractTaxId,
             new UpdateCompanyRequest("Contract", 25, 59.90m, 8.00m),
             OperatorId,
             CancellationToken.None);
 
         Assert.Equal(8.00m, updated.FeePerMember);
 
-        var listed = await catalog.Service.GetAsync("58515495000171", CancellationToken.None);
+        var listed = await catalog.Service.GetAsync(ContractTaxId, CancellationToken.None);
         Assert.Equal(8.00m, listed.FeePerMember);
     }
 

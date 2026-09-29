@@ -9,6 +9,7 @@ public sealed class CorporateBillingDraftServiceTests
     private const string OperatorId = "maria";
     private const string OpenSportsTaxId = "56087276000103";
     private const string WebPradoTaxId = "43322169000170";
+    private const string ContractTaxId = "58515495000171";
     private static readonly BillingPeriodReference September2026 = new(2026, 9);
 
     [Fact]
@@ -195,6 +196,55 @@ public sealed class CorporateBillingDraftServiceTests
         Assert.Empty(scenario.DataStore.BillingDrafts);
     }
 
+    /// <summary>
+    /// A regressão que protege as 30 empresas ativas que não pagam taxa: elas
+    /// precisam gerar exatamente a prévia que já geravam antes.
+    /// </summary>
+    [Fact]
+    public async Task GenerateAsync_AddsNoFeeItemToACompanyWithoutAFee()
+    {
+        var scenario = new TestScenario();
+        scenario.AddCompany(OpenSportsTaxId, "Open Sports", 89.90m);
+        scenario.AddMembers(OpenSportsTaxId, 24);
+
+        var result = await scenario.GenerateAsync();
+
+        Assert.Equal(2157.60m, result.Created.Single().TotalAmount);
+        Assert.Equal(24, scenario.DataStore.BillingDrafts.Single().Value.Items.Count);
+    }
+
+    [Fact]
+    public async Task GenerateAsync_ChargesTheFeeOncePerMember()
+    {
+        var scenario = new TestScenario();
+        scenario.AddCompany(ContractTaxId, "Contract", 59.90m, feePerMember: 8.00m);
+        scenario.AddMembers(ContractTaxId, 6);
+
+        var result = await scenario.GenerateAsync();
+
+        // 6 x 59,90 = 359,40 de mensalidade, mais 6 x 8,00 = 48,00 de taxa.
+        Assert.Equal(407.40m, result.Created.Single().TotalAmount);
+        Assert.Equal(8.00m, result.Created.Single().FeePerMember);
+    }
+
+    [Fact]
+    public async Task GenerateAsync_PutsTheFeeInASingleNamedItem()
+    {
+        var scenario = new TestScenario();
+        scenario.AddCompany(ContractTaxId, "Contract", 59.90m, feePerMember: 8.00m);
+        scenario.AddMembers(ContractTaxId, 6);
+
+        await scenario.GenerateAsync();
+
+        var items = scenario.DataStore.BillingDrafts.Single().Value.Items;
+        Assert.Equal(7, items.Count);
+        var feeItem = items.Single(item => item.ExternalMemberId is null);
+        Assert.Equal("Taxa administrativa", feeItem.Description);
+        Assert.Equal(6, feeItem.Quantity);
+        Assert.Equal(8.00m, feeItem.UnitAmount);
+        Assert.Equal(48.00m, feeItem.TotalAmount);
+    }
+
     private sealed class TestScenario
     {
         private long nextMemberId = 1;
@@ -229,12 +279,18 @@ public sealed class CorporateBillingDraftServiceTests
             string taxId,
             string name,
             decimal? amountPerMember,
-            bool isActive = true)
+            bool isActive = true,
+            decimal? feePerMember = null)
         {
             var company = Company.CreateManually(taxId, name, OperatorId, DateTimeOffset.UtcNow);
             if (amountPerMember is not null)
             {
                 company.SetAmountPerMember(amountPerMember, OperatorId, DateTimeOffset.UtcNow);
+            }
+
+            if (feePerMember is not null)
+            {
+                company.SetFeePerMember(feePerMember, OperatorId, DateTimeOffset.UtcNow);
             }
 
             if (!isActive)

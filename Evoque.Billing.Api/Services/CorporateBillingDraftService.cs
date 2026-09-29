@@ -66,6 +66,7 @@ public sealed class CorporateBillingDraftService(
             }
 
             var amountPerMember = company.AmountPerMember!.Value;
+            var feePerMember = company.FeePerMember;
             var version = ResolveNextVersion(company.TaxId, existingDraftsByCompany);
             var billingDraft = new BillingDraft(
                 billingPeriod.Id,
@@ -73,13 +74,7 @@ public sealed class CorporateBillingDraftService(
                 company.DisplayName,
                 company.TaxId,
                 null,
-                companyMembers
-                    .Select(member => new BillingDraftItem(
-                        member.MemberName,
-                        1,
-                        amountPerMember,
-                        member.EvoMemberId.ToString()))
-                    .ToArray(),
+                BuildItems(companyMembers, amountPerMember, feePerMember),
                 version,
                 generatedAt);
 
@@ -91,7 +86,9 @@ public sealed class CorporateBillingDraftService(
                     generatedAt,
                     billingPeriod.Id,
                     billingDraft.Id,
-                    $"{companyMembers.Length} colaborador(es) x {amountPerMember:F2} para {company.DisplayName}."),
+                    feePerMember is > 0m
+                        ? $"{companyMembers.Length} colaborador(es) x {amountPerMember:F2} mais taxa de {feePerMember.Value:F2} por colaborador para {company.DisplayName}."
+                        : $"{companyMembers.Length} colaborador(es) x {amountPerMember:F2} para {company.DisplayName}."),
                 cancellationToken);
 
             created.Add(new GeneratedBillingDraftResponse(
@@ -100,6 +97,7 @@ public sealed class CorporateBillingDraftService(
                 company.DisplayName,
                 companyMembers.Length,
                 amountPerMember,
+                feePerMember,
                 billingDraft.TotalAmount));
         }
 
@@ -114,6 +112,40 @@ public sealed class CorporateBillingDraftService(
             skipped,
             unknownContracts,
             membersWithoutCompany);
+    }
+
+    /// <summary>
+    /// Uma linha por colaborador e, quando a empresa paga taxa administrativa,
+    /// uma única linha de taxa no fim.
+    ///
+    /// A taxa é um item próprio, e não um acréscimo ao valor unitário de cada
+    /// colaborador, porque o boleto e a nota levam só o total: se o valor for
+    /// embutido, a distinção entre mensalidade e taxa desaparece do sistema e
+    /// a conferência contra o controle operacional para de bater.
+    /// </summary>
+    private static IReadOnlyCollection<BillingDraftItem> BuildItems(
+        IReadOnlyCollection<CorporateMember> companyMembers,
+        decimal amountPerMember,
+        decimal? feePerMember)
+    {
+        var items = companyMembers
+            .Select(member => new BillingDraftItem(
+                member.MemberName,
+                1,
+                amountPerMember,
+                member.EvoMemberId.ToString()))
+            .ToList();
+
+        if (feePerMember is > 0m)
+        {
+            items.Add(new BillingDraftItem(
+                "Taxa administrativa",
+                companyMembers.Count,
+                feePerMember.Value,
+                null));
+        }
+
+        return items;
     }
 
     private static IEnumerable<IGrouping<string, CorporateMember>> GroupBillableMembers(

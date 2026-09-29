@@ -124,8 +124,11 @@ public sealed record CompanyResponse(
             company.RetainsIss,
             company.UpdatedAt,
             company.UpdatedBy,
-            company.AmountPerMember,
-            company.FeePerMember);
+            // Nomeados porque são dois decimal? adjacentes que alimentam o
+            // cálculo da cobrança: uma reordenação futura mostraria a taxa no
+            // lugar da mensalidade sem o compilador acusar nada.
+            AmountPerMember: company.AmountPerMember,
+            FeePerMember: company.FeePerMember);
     }
 }
 

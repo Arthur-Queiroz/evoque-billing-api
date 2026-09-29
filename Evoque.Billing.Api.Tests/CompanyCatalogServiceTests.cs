@@ -354,6 +354,32 @@ public sealed class CompanyCatalogServiceTests
         Assert.Equal(89.90m, listed.AmountPerMember);
     }
 
+    /// <summary>
+    /// A taxa precisa atravessar o cadastro e voltar na leitura, pelo mesmo
+    /// motivo do valor por colaborador: sem isto ela existiria no domínio e
+    /// seria invisível para quem opera.
+    /// </summary>
+    [Fact]
+    public async Task UpdateAsync_StoresAndReturnsTheFeePerMember()
+    {
+        var catalog = CreateCatalog();
+        await catalog.Service.CreateAsync(
+            new CreateCompanyRequest("58515495000171", "Contract", 25),
+            OperatorId,
+            CancellationToken.None);
+
+        var updated = await catalog.Service.UpdateAsync(
+            "58515495000171",
+            new UpdateCompanyRequest("Contract", 25, 59.90m, 8.00m),
+            OperatorId,
+            CancellationToken.None);
+
+        Assert.Equal(8.00m, updated.FeePerMember);
+
+        var listed = await catalog.Service.GetAsync("58515495000171", CancellationToken.None);
+        Assert.Equal(8.00m, listed.FeePerMember);
+    }
+
     [Fact]
     public async Task SynchronizeAsync_CompletesWhenTheRegistryGatewayThrowsUnexpectedly()
     {

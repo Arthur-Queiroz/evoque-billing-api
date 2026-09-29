@@ -1,6 +1,6 @@
 # Pendências do Evoque Cobranças
 
-Atualizado em 18/09/2026.
+Atualizado em 25/09/2026.
 
 Este documento reúne o que foi levantado na reunião de apresentação e na
 auditoria do software feita antes dela. Cada item traz a evidência que o
@@ -60,6 +60,36 @@ histórico. Uma prévia que nunca virou cobrança não tem histórico a preserva
 **Correção proposta:** cancelar uma prévia que ainda não gerou cobrança,
 preservando o registro de que ela existiu e quem cancelou. Uma prévia com
 `AsaasPaymentId` preenchido nunca pode ser cancelada.
+
+### 1.3 Um `PUT` de empresa que omite um valor o apaga em silêncio
+
+**Gravidade: média. Perde dinheiro sem sinal, mas só por caminho fora do portal.**
+
+`PUT /api/companies/{taxId}` é substituição total, e `UpdateCompanyRequest` traz
+`AmountPerMember` e `FeePerMember` com padrão `null`. `UpdateAsync` chama os dois
+setters sem condição:
+
+```csharp
+company.SetAmountPerMember(request.AmountPerMember, operatorId, updatedAt);
+company.SetFeePerMember(request.FeePerMember, operatorId, updatedAt);
+```
+
+Uma requisição que omite a chave zera o campo. Um script que só queria corrigir o
+nome operacional apaga o preço da empresa, e a prévia seguinte sai errada sem
+nenhum aviso.
+
+O portal está a salvo: ele envia sempre as duas chaves, com `null` explícito para
+campo vazio. A exposição é qualquer outro chamador — script, `curl`, integração
+futura.
+
+Isto é anterior à taxa: o valor por colaborador tem o mesmo comportamento desde
+que foi criado, e o valor é o número maior dos dois. Foi registrado aqui, e não
+corrigido junto da taxa, porque consertar só um dos dois campos deixaria a
+inconsistência pior que a falha.
+
+**Correção proposta:** decidir entre exigir os dois campos explicitamente no
+contrato, ou separar a alteração de valores num endpoint próprio, como já se fez
+com a retenção de ISS. Tratar os dois campos juntos, na mesma decisão.
 
 ---
 
@@ -225,6 +255,30 @@ pelo Azure sem mudar services ou regras de domínio. O item 2.1 continua aberto
 por falta da consulta e da tela de auditoria, mas deixou de ser prejudicado por
 nomes fictícios.
 
+### 2.6 Fee fixo por empresa não é cobrado
+
+**Levantado em 25/09/2026, ao implementar a taxa por colaborador.**
+
+A coluna `VALOR FEE` da aba `ADESÕES B2B` do controle operacional tem três
+formas. Duas são por colaborador e foram implementadas: `8 reais por aderido`
+em oito empresas e `9,90 por aderido` em três. A terceira não:
+
+| Empresa | CNPJ | Fee |
+|---|---|---|
+| MFA Pasta e Alimentos | 07.618.678/0001-81 | `500 reais fixo` |
+
+O software só sabe cobrar taxa por colaborador. A MFA vai gerar prévia **sem
+taxa nenhuma**, e nada no sistema sinaliza a falta: não há aviso, não há campo
+vazio visível, a prévia simplesmente sai R$ 500,00 menor do que deveria.
+
+Hoje isso não causa prejuízo porque a MFA não é faturada — está sem valor por
+colaborador e sem prévia. O risco é o dia em que alguém preencher o valor dela e
+o faturamento parecer correto.
+
+**Correção proposta:** decidir se o fee fixo é um segundo campo da empresa ou um
+item avulso da prévia, antes de a MFA entrar em lote. Enquanto não existir,
+conferir a MFA à mão sempre que ela aparecer numa competência.
+
 ---
 
 ## 3. Limitações externas
@@ -348,11 +402,18 @@ Há também quatro componentes que nunca são renderizados: `MembersPage`,
 
 Não afeta o funcionamento. Afeta quem for alterar.
 
-### 4.2 `CompanyResponse` com 23 campos posicionais
+### 4.2 `CompanyResponse` com 25 campos posicionais
 
 O record cresceu a ponto de dois `bool` adjacentes serem difíceis de auditar
 visualmente no ponto de construção. Vale quebrar em sub-objetos quando houver
 motivo para mexer nele.
+
+A taxa por colaborador, em 25/09/2026, piorou o caso: agora há também dois
+`decimal?` adjacentes — `AmountPerMember` e `FeePerMember` —, e trocá-los de
+posição cobraria a taxa como mensalidade sem o compilador reclamar. O mesmo par
+existe em `Company.Restore`, onde a leitura do repositório passou a usar
+argumentos nomeados só para esses dois, exatamente para que uma reordenação
+futura exija edição deliberada.
 
 ---
 

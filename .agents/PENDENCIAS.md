@@ -410,10 +410,13 @@ motivo para mexer nele.
 
 A taxa por colaborador, em 25/09/2026, piorou o caso: agora há também dois
 `decimal?` adjacentes — `AmountPerMember` e `FeePerMember` —, e trocá-los de
-posição cobraria a taxa como mensalidade sem o compilador reclamar. O mesmo par
-existe em `Company.Restore`, onde a leitura do repositório passou a usar
-argumentos nomeados só para esses dois, exatamente para que uma reordenação
-futura exija edição deliberada.
+posição mostraria a taxa como mensalidade sem o compilador reclamar.
+
+O mesmo par existe em `Company.Restore`. Os **dois** pontos de construção passaram
+a nomear esses dois argumentos — `CompanyResponse.FromDomain` e a leitura em
+`MySqlCompanyRepository` —, para que uma reordenação futura exija edição
+deliberada. Nomear só um deles deixaria a proteção pela metade, que é pior que
+não tê-la: dá a impressão de que o par está coberto.
 
 ---
 

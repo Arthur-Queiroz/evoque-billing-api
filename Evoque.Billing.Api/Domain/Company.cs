@@ -130,7 +130,8 @@ public sealed class Company
     /// Taxa administrativa que a empresa paga por colaborador, somada à
     /// mensalidade. Vem do acordo comercial, não do EVO.
     ///
-    /// Nulo é o estado normal: das empresas do catálogo, só oito pagam taxa.
+    /// Nulo é o estado normal: a maioria das empresas do catálogo não paga
+    /// taxa administrativa.
     /// </summary>
     public decimal? FeePerMember { get; private set; }
 
@@ -367,6 +368,11 @@ public sealed class Company
         RegisterUpdate(operatorId, updatedAt);
     }
 
+    /// <summary>
+    /// Zero e negativo não são taxa. Aceitar zero como sinônimo de "sem taxa"
+    /// criaria duas representações para o mesmo estado, quebrando a regra
+    /// única que já vale para <see cref="AmountPerMember"/>.
+    /// </summary>
     public void SetFeePerMember(decimal? feePerMember, string operatorId, DateTimeOffset updatedAt)
     {
         if (feePerMember is <= 0m)

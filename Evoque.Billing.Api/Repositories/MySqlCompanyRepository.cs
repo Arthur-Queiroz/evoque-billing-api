@@ -196,10 +196,13 @@ public sealed class MySqlCompanyRepository(MySqlConnectionFactory connectionFact
             ReadNullableString(reader, "asaas_sandbox_customer_id"),
             ReadNullableString(reader, "asaas_production_customer_id"),
             reader.GetBoolean("retains_iss"),
-            reader.IsDBNull(reader.GetOrdinal("amount_per_member"))
+            // Nomeados porque os dois são decimal? adjacentes e alimentam o
+            // cálculo da cobrança: uma futura reordenação silenciosa trocaria
+            // mensalidade por taxa sem que o compilador acusasse nada.
+            amountPerMember: reader.IsDBNull(reader.GetOrdinal("amount_per_member"))
                 ? null
                 : reader.GetDecimal("amount_per_member"),
-            reader.IsDBNull(reader.GetOrdinal("fee_per_member"))
+            feePerMember: reader.IsDBNull(reader.GetOrdinal("fee_per_member"))
                 ? null
                 : reader.GetDecimal("fee_per_member"),
             reader.GetString("created_by"),

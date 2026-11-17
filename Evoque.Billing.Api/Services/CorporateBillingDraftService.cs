@@ -6,14 +6,22 @@ namespace Evoque.Billing.Api.Services;
 
 /// <summary>
 /// Gera prévias a partir da base local de colaboradores e do valor combinado
-/// com cada empresa. Não lê planilha nem consulta o EVO.
+/// com cada empresa. Não lê planilha. Consulta o EVO só para saber quando cada
+/// colaborador entrou no convênio, e calcular o proporcional de entrada.
 /// </summary>
+/// <remarks>
+/// O proporcional nunca reduz uma cobrança sem evidência: sem dia de fechamento,
+/// com o EVO fora do ar ou sem contrato corporativo no histórico, o colaborador
+/// é cobrado pelo valor cheio e a prévia devolve um aviso para quem aprova.
+/// </remarks>
 public sealed class CorporateBillingDraftService(
     IBillingPeriodRepository billingPeriodRepository,
     ICompanyRepository companyRepository,
     ICorporateMemberRepository corporateMemberRepository,
     IBillingDraftRepository billingDraftRepository,
-    IAuditLogRepository auditLogRepository)
+    IAuditLogRepository auditLogRepository,
+    ICompanyBillingScheduleRepository companyBillingScheduleRepository,
+    CorporateMemberEntryDateService corporateMemberEntryDateService)
 {
     public async Task<GenerateCorporateBillingDraftsResponse> GenerateAsync(
         BillingPeriodReference billingPeriodReference,
@@ -40,12 +48,20 @@ public sealed class CorporateBillingDraftService(
         var companiesByTaxId = companies.ToDictionary(company => company.TaxId, StringComparer.Ordinal);
         var members = await corporateMemberRepository.ListAsync(cancellationToken);
 
+        var schedules = await companyBillingScheduleRepository.ListAsync(cancellationToken);
+        var closingDaysByTaxId = schedules
+            .GroupBy(schedule => schedule.ExternalCompanyId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First().ClosingDay, StringComparer.Ordinal);
+
         var created = new List<GeneratedBillingDraftResponse>();
         var skipped = new List<SkippedCompanyResponse>();
         var unknownContracts = new SortedSet<string>(StringComparer.Ordinal);
         var membersWithoutCompany = new List<MemberWithoutCompanyResponse>();
+        var membersOutsidePeriod = new List<MemberOutsidePeriodResponse>();
+        var prorationWarnings = new List<ProrationWarningResponse>();
         var generatedAt = DateTimeOffset.UtcNow;
 
+        var companiesToGenerate = new List<(Company Company, CorporateMember[] Members)>();
         foreach (var membersOfCompany in GroupBillableMembers(
             members,
             companiesByTaxId,
@@ -65,7 +81,100 @@ public sealed class CorporateBillingDraftService(
                 continue;
             }
 
+            companiesToGenerate.Add((company, companyMembers));
+        }
+
+        // Uma única passada pelo EVO para todas as empresas, em lotes, em vez de
+        // uma consulta por empresa.
+        var entryDates = await corporateMemberEntryDateService.ResolveAsync(
+            companiesToGenerate
+                .Where(companyToGenerate => closingDaysByTaxId.ContainsKey(companyToGenerate.Company.TaxId))
+                .SelectMany(companyToGenerate => companyToGenerate.Members)
+                .Select(member => member.EvoMemberId)
+                .ToArray(),
+            cancellationToken);
+
+        foreach (var (company, companyMembers) in companiesToGenerate)
+        {
             var amountPerMember = company.AmountPerMember!.Value;
+            DateOnly? closingDate = closingDaysByTaxId.TryGetValue(company.TaxId, out var closingDay)
+                ? new DateOnly(billingPeriodReference.Year, billingPeriodReference.Month, closingDay)
+                : null;
+            if (closingDate is null)
+            {
+                prorationWarnings.Add(new ProrationWarningResponse(
+                    company.TaxId,
+                    company.DisplayName,
+                    null,
+                    null,
+                    "Empresa sem dia de fechamento: o proporcional de entrada não foi calculado e todos foram cobrados pelo valor cheio."));
+            }
+
+            var items = new List<BillingDraftItem>();
+            var proratedMembers = new List<ProratedMemberResponse>();
+            foreach (var member in companyMembers)
+            {
+                if (closingDate is null)
+                {
+                    items.Add(CreateFullItem(member, amountPerMember));
+                    continue;
+                }
+
+                if (!entryDates.EntryDates.TryGetValue(member.EvoMemberId, out var entryDate))
+                {
+                    var failure = entryDates.Failures.GetValueOrDefault(
+                        member.EvoMemberId,
+                        "Data de entrada não encontrada no Evo.");
+                    prorationWarnings.Add(new ProrationWarningResponse(
+                        company.TaxId,
+                        company.DisplayName,
+                        member.EvoMemberId,
+                        member.MemberName,
+                        $"{failure} Cobrado pelo valor cheio."));
+                    items.Add(CreateFullItem(member, amountPerMember));
+                    continue;
+                }
+
+                var proration = EntryProration.Calculate(amountPerMember, entryDate, closingDate.Value);
+                switch (proration.Kind)
+                {
+                    case EntryProrationKind.OutsidePeriod:
+                        membersOutsidePeriod.Add(new MemberOutsidePeriodResponse(
+                            member.EvoMemberId,
+                            member.MemberName,
+                            company.DisplayName,
+                            entryDate));
+                        break;
+                    case EntryProrationKind.Prorated:
+                        items.Add(new BillingDraftItem(
+                            $"{member.MemberName} — proporcional {proration.BilledDays}/{EntryProration.BaseDays} dias "
+                            + $"(entrada em {entryDate:dd/MM/yyyy})",
+                            1,
+                            proration.Amount,
+                            member.EvoMemberId.ToString()));
+                        proratedMembers.Add(new ProratedMemberResponse(
+                            member.EvoMemberId,
+                            member.MemberName,
+                            entryDate,
+                            proration.BilledDays,
+                            proration.Amount));
+                        break;
+                    default:
+                        items.Add(CreateFullItem(member, amountPerMember));
+                        break;
+                }
+            }
+
+            if (items.Count == 0)
+            {
+                skipped.Add(new SkippedCompanyResponse(
+                    company.TaxId,
+                    company.DisplayName,
+                    companyMembers.Length,
+                    "Todos os colaboradores entraram depois do fechamento desta competência."));
+                continue;
+            }
+
             var version = ResolveNextVersion(company.TaxId, existingDraftsByCompany);
             var billingDraft = new BillingDraft(
                 billingPeriod.Id,
@@ -73,13 +182,7 @@ public sealed class CorporateBillingDraftService(
                 company.DisplayName,
                 company.TaxId,
                 null,
-                companyMembers
-                    .Select(member => new BillingDraftItem(
-                        member.MemberName,
-                        1,
-                        amountPerMember,
-                        member.EvoMemberId.ToString()))
-                    .ToArray(),
+                items,
                 version,
                 generatedAt);
 
@@ -91,16 +194,18 @@ public sealed class CorporateBillingDraftService(
                     generatedAt,
                     billingPeriod.Id,
                     billingDraft.Id,
-                    $"{companyMembers.Length} colaborador(es) x {amountPerMember:F2} para {company.DisplayName}."),
+                    DescribeGeneration(company, items.Count, amountPerMember, closingDate, proratedMembers)),
                 cancellationToken);
 
             created.Add(new GeneratedBillingDraftResponse(
                 billingDraft.Id,
                 company.TaxId,
                 company.DisplayName,
-                companyMembers.Length,
+                items.Count,
                 amountPerMember,
-                billingDraft.TotalAmount));
+                billingDraft.TotalAmount,
+                closingDate,
+                proratedMembers));
         }
 
         if (created.Count > 0)
@@ -113,7 +218,40 @@ public sealed class CorporateBillingDraftService(
             created,
             skipped,
             unknownContracts,
-            membersWithoutCompany);
+            membersWithoutCompany,
+            membersOutsidePeriod,
+            prorationWarnings);
+    }
+
+    private static BillingDraftItem CreateFullItem(CorporateMember member, decimal amountPerMember)
+    {
+        return new BillingDraftItem(member.MemberName, 1, amountPerMember, member.EvoMemberId.ToString());
+    }
+
+    private static string DescribeGeneration(
+        Company company,
+        int itemCount,
+        decimal amountPerMember,
+        DateOnly? closingDate,
+        IReadOnlyCollection<ProratedMemberResponse> proratedMembers)
+    {
+        var description = $"{itemCount} colaborador(es) x {amountPerMember:F2} para {company.DisplayName}";
+        if (closingDate is null)
+        {
+            return description + ", sem dia de fechamento: proporcional não calculado.";
+        }
+
+        description += $", fechamento em {closingDate:dd/MM/yyyy}";
+        if (proratedMembers.Count == 0)
+        {
+            return description + ".";
+        }
+
+        var prorated = string.Join(
+            "; ",
+            proratedMembers.Select(member =>
+                $"{member.EvoMemberId} {member.BilledDays}/{EntryProration.BaseDays} dias desde {member.EntryDate:dd/MM/yyyy} = {member.Amount:F2}"));
+        return $"{description}. Proporcional de entrada: {prorated}.";
     }
 
     private static IEnumerable<IGrouping<string, CorporateMember>> GroupBillableMembers(

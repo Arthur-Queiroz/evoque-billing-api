@@ -2,6 +2,8 @@ namespace Evoque.Billing.Api.Integrations.Evo;
 
 public interface IEvoDirectoryGateway
 {
+    const int MaximumMembersPerLookup = 50;
+
     Task<IReadOnlyCollection<EvoEmployee>> ListEmployeesAsync(
         string? name,
         string? email,
@@ -14,6 +16,14 @@ public interface IEvoDirectoryGateway
         int take,
         int skip,
         bool includeMemberships,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Consulta membros pelo IdCliente, com o histórico completo de contratos.
+    /// O Evo aceita no máximo <see cref="MaximumMembersPerLookup"/> por chamada.
+    /// </summary>
+    Task<IReadOnlyCollection<EvoMember>> ListMembersByIdsAsync(
+        IReadOnlyCollection<long> memberIds,
         CancellationToken cancellationToken);
 
     Task<IReadOnlyCollection<EvoPartnership>> ListPartnershipsAsync(

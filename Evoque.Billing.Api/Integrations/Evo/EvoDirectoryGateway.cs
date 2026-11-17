@@ -124,7 +124,49 @@ public sealed class EvoDirectoryGateway(
             ?? throw new ExternalOperationNotAllowedException(
                 "O Evo retornou uma resposta inválida ao consultar membros.");
 
-        return members.Select(member => new EvoMember(
+        return members.Select(MapMember).ToArray();
+    }
+
+    public async Task<IReadOnlyCollection<EvoMember>> ListMembersByIdsAsync(
+        IReadOnlyCollection<long> memberIds,
+        CancellationToken cancellationToken)
+    {
+        if (memberIds.Count == 0)
+        {
+            return [];
+        }
+
+        if (memberIds.Count > IEvoDirectoryGateway.MaximumMembersPerLookup)
+        {
+            throw new ArgumentException(
+                $"O Evo aceita no máximo {IEvoDirectoryGateway.MaximumMembersPerLookup} membros por consulta.",
+                nameof(memberIds));
+        }
+
+        ConfigureHttpClient(httpClient, evoOptions.Value);
+
+        var requestUri = string.Create(
+            CultureInfo.InvariantCulture,
+            $"api/v2/members?idsMembers={string.Join(',', memberIds)}" +
+            $"&showMemberships=true&take={IEvoDirectoryGateway.MaximumMembersPerLookup}");
+        using var response = await httpClient.GetAsync(requestUri, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new ExternalOperationNotAllowedException(
+                $"Não foi possível consultar membros no Evo (HTTP {(int)response.StatusCode}).");
+        }
+
+        var members = await response.Content.ReadFromJsonAsync<IReadOnlyCollection<EvoMemberResponse>>(
+            cancellationToken: cancellationToken)
+            ?? throw new ExternalOperationNotAllowedException(
+                "O Evo retornou uma resposta inválida ao consultar membros.");
+
+        return members.Select(MapMember).ToArray();
+    }
+
+    private static EvoMember MapMember(EvoMemberResponse member)
+    {
+        return new EvoMember(
             member.IdMember,
             member.IdBranch,
             member.BranchName,
@@ -135,14 +177,14 @@ public sealed class EvoDirectoryGateway(
                 .Select(membership => new EvoMembership(
                     membership.IdMembership!.Value,
                     membership.IdMemberMembership!.Value,
-                    membership.Name ?? "Contrato nÃ£o informado",
+                    membership.Name ?? "Contrato não informado",
                     membership.MembershipStatus,
                     membership.ValueNextMonth,
                     ReadDecimalOrNull(membership.NextCharge),
                     membership.StartDate,
                     membership.EndDate,
                     membership.NextDateSuspension))
-                .ToArray())).ToArray();
+                .ToArray());
     }
 
     public async Task<IReadOnlyCollection<EvoMemberMembership>> ListMemberMembershipsAsync(

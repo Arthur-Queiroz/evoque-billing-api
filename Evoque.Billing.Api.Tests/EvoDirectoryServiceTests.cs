@@ -123,6 +123,13 @@ public sealed class EvoDirectoryServiceTests
             return Task.FromResult<IReadOnlyCollection<EvoMember>>([]);
         }
 
+        public Task<IReadOnlyCollection<EvoMember>> ListMembersByIdsAsync(
+            IReadOnlyCollection<long> memberIds,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyCollection<EvoMember>>([]);
+        }
+
         public Task<IReadOnlyCollection<EvoBranchGroup>> ListBranchGroupsAsync(
             CancellationToken cancellationToken)
         {

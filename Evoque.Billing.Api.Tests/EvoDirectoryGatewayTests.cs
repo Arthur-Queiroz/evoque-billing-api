@@ -44,9 +44,49 @@ public sealed class EvoDirectoryGatewayTests
         Assert.Equal(new DateOnly(2026, 7, 1), receivable.CompetenceDate);
     }
 
+    [Fact]
+    public async Task ListMembersByIdsAsync_RequestsTheFullContractHistoryOfTheGivenMembers()
+    {
+        const string responseJson = """
+            [
+              {
+                "idMember": 45010,
+                "idBranch": 1,
+                "branchName": "Filial",
+                "firstName": "Pessoa",
+                "lastName": "de Teste",
+                "memberships": [
+                  {
+                    "idMembership": 1361,
+                    "idMemberMembership": 2249671,
+                    "name": "EVOQUE CORPORATIVO - FOLHA DE PAGAMENTO",
+                    "membershipStatus": "expired",
+                    "startDate": "2025-11-14T00:00:00",
+                    "endDate": "2025-12-13T00:00:00"
+                  }
+                ]
+              }
+            ]
+            """;
+        var httpMessageHandler = new StaticResponseHttpMessageHandler(responseJson);
+        var gateway = CreateGateway(httpMessageHandler);
+
+        var members = await gateway.ListMembersByIdsAsync([45010, 30002], CancellationToken.None);
+
+        Assert.Equal(
+            "https://evo.example/api/v2/members?idsMembers=45010,30002&showMemberships=true&take=50",
+            httpMessageHandler.LastRequestUri?.ToString());
+        var membership = Assert.Single(Assert.Single(members).Memberships);
+        Assert.Equal(new DateTime(2025, 11, 14), membership.StartDate!.Value.DateTime);
+    }
+
     private static EvoDirectoryGateway CreateGateway(string responseJson)
     {
-        var httpMessageHandler = new StaticResponseHttpMessageHandler(responseJson);
+        return CreateGateway(new StaticResponseHttpMessageHandler(responseJson));
+    }
+
+    private static EvoDirectoryGateway CreateGateway(StaticResponseHttpMessageHandler httpMessageHandler)
+    {
         var httpClient = new HttpClient(httpMessageHandler);
         var options = Options.Create(new EvoOptions
         {
@@ -60,10 +100,13 @@ public sealed class EvoDirectoryGatewayTests
 
     private sealed class StaticResponseHttpMessageHandler(string responseJson) : HttpMessageHandler
     {
+        public Uri? LastRequestUri { get; private set; }
+
         protected override Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,
             CancellationToken cancellationToken)
         {
+            LastRequestUri = request.RequestUri;
             var response = new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent(responseJson, Encoding.UTF8, "application/json"),

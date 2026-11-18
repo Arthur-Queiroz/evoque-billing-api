@@ -123,6 +123,43 @@ planilha do CRM 2.0 → empresa pagadora → CNPJ → cliente Asaas → dia
 - O Asaas envia o boleto/e-mail ao cliente cadastrado; o MVP não depende de
   Gmail ou OAuth do GCP.
 
+## Proporcional de entrada
+
+Combinado com a Evoque em 11/2026. Implementado em `EntryProration` e aplicado
+na geração de prévias pelo catálogo (`CorporateBillingDraftService`).
+
+- Só o **primeiro mês do colaborador no convênio** é proporcional. Quem sai e
+  volta depois não é entrada nova: paga o valor cheio.
+- A data de entrada é o início do **primeiro contrato corporativo cobrável**
+  (`BillableCorporateContracts`) do histórico do colaborador no EVO, não o
+  cadastro na academia. Quem já era aluno com plano próprio entra no convênio
+  quando passa para o plano da empresa.
+- **O contrato do EVO renova todo mês.** Cada ciclo do aluno vira um vínculo
+  novo, com `startDate` novo. A data do contrato ativo diria que todo mundo
+  acabou de entrar; por isso a entrada é lida do histórico completo, por
+  `GET api/v2/members?idsMembers=...&showMemberships=true`, em lotes de 50.
+- O período é definido pelo fechamento: competência 06/2026 com fechamento no
+  dia 25 vai de 26/05 a 25/06.
+- Valor: `valor_por_colaborador / 30 × (fechamento − entrada)`, arredondado em
+  centavos. A base é sempre 30, mesmo em período de 31 ou 28 dias. Entrada em
+  14/06 com fechamento em 25/06 são 11 dias.
+- Quem entra no primeiro dia do período usou o período inteiro e paga o valor
+  cheio. O valor nunca passa do cheio.
+- Quem entra no dia do fechamento ou depois não é cobrado na competência, e
+  aparece em `MembersOutsidePeriod`. O primeiro mês dele cai no período seguinte.
+- A saída no meio do período **não** é proporcional: paga o valor cheio.
+- **Sem evidência, não há desconto.** Empresa sem dia de fechamento, EVO
+  indisponível, colaborador não devolvido pelo EVO ou sem contrato corporativo
+  no histórico: o colaborador é cobrado pelo valor cheio e a geração devolve um
+  aviso em `ProrationWarnings`.
+- O item da prévia descreve o cálculo (`proporcional 11/30 dias (entrada em
+  14/06/2026)`) e a auditoria registra dias, data de entrada e valor de cada
+  proporcional.
+
+Na validação com a produção em 16/11/2026, 146 dos 152 colaboradores cobráveis
+tiveram a entrada resolvida. Os seis restantes não são devolvidos pelo EVO na
+consulta por IdCliente e caem no aviso com valor cheio.
+
 ## Nota fiscal de serviço
 
 - A nota é emitida no mesmo lote autorizado que cria a cobrança, vinculada ao

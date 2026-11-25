@@ -47,6 +47,12 @@ criação real é uma chave de segurança separada: a variável do ambiente GitH
 esse valor como `ASAAS__PRODUCTION__ALLOWCHARGECREATION` no runtime. Mantê-la
 em `false` permite somente consultas e sincronização de clientes reais.
 
+## Operação mensal
+
+O passo a passo do faturamento pela tela — competência, atualização dos
+colaboradores pela exportação do CRM, prévias, aprovação e lote do dia — está
+em [`.agents/specs/OPERATION.md`](.agents/specs/OPERATION.md).
+
 ## Lotes e retentativas
 
 `POST /api/charge-batches` cria um lote somente após a confirmação textual

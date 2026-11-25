@@ -9,6 +9,8 @@ Leia antes de alterar código:
    Actions ou variáveis de ambiente.
 5. `.agents/PENDENCIAS.md` para saber o que já está levantado antes de abrir
    trabalho novo.
+6. `.agents/specs/OPERATION.md` para o passo a passo do faturamento mensal na
+   tela e os problemas operacionais conhecidos.
 
 ## Backend
 

@@ -44,6 +44,20 @@ Só cria a competência. Nada vai ao Asaas.
      novo.
 4. Marcar a confirmação de exportação completa e **Atualizar base**.
 
+> **Nunca importe um recorte.** Esta tela trata o arquivo como a lista completa
+> de clientes ativos e inativa quem não estiver nele: um arquivo só com uma
+> empresa inativaria os colaboradores de todas as outras. Filtrar a planilha
+> não atrapalha; apagar ou copiar linhas para outra planilha, sim. Para
+> conferir os colaboradores de uma empresa, use a tela **Colaboradores** ou a
+> prévia dela em Cobranças — não é preciso importar nada.
+>
+> Em 25/11/2026 um recorte manual da Plastpel (`PLASTPEL 11.xlsx`: 8 linhas,
+> sem cabeçalho, sem `IdCliente`) foi recusado com "Não foi encontrada a coluna
+> Empresa ou Profissão na planilha exportada do EVO". A recusa é a proteção
+> funcionando: sem a linha de cabeçalho o leitor não acha as colunas, e sem
+> `IdCliente` não há como identificar as pessoas. Os 8 já estavam ativos no
+> catálogo.
+
 > **Não use "Importar fechamento do EVO"** (card escuro em Cobranças) com a
 > exportação do CRM. Aquela tela é para a planilha financeira de fechamento:
 > ela soma a coluna "Valor do contrato", que na exportação do CRM é o que os
